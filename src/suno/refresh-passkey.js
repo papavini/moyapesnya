@@ -1,6 +1,8 @@
 /**
- * Обновляет passkey token: перезагружает suno.com/create,
- * перехватывает turnstile.render → получает sitekey → вызывает execute напрямую.
+ * Обновляет passkey token через CDP:
+ * 1. Инжектит скрипт через Page.addScriptToEvaluateOnNewDocument (ДО загрузки)
+ * 2. Перезагружает страницу
+ * 3. Скрипт перехватывает turnstile.render → получает sitekey → execute → token
  * НЕ кликает Create, НЕ тратит кредиты.
  */
 
@@ -20,92 +22,89 @@ export async function refreshPasskeyToken() {
 
     return new Promise((resolve) => {
       let resolved = false;
-      const timeout = setTimeout(() => {
-        if (!resolved) { resolved = true; try { ws.close(); } catch {} resolve(false); }
-      }, 20000);
+      const done = (val) => {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(timeout);
+        resolve(val);
+      };
+      const timeout = setTimeout(() => done(false), 25000);
 
       const ws = new WebSocket(sunoTab.webSocketDebuggerUrl);
 
-      ws.on('open', () => {
-        // Step 1: Inject script that intercepts turnstile.render to capture sitekey,
-        // then calls execute with that sitekey to get token WITHOUT clicking Create
-        const inject = `(function(){
-          return new Promise(function(resolve) {
-            // Patch render to capture sitekey on next page load
-            var origRender = window.turnstile.render;
-            window.turnstile.render = function(container, params) {
-              var sk = params && params.sitekey;
-              if (sk) {
-                // Got sitekey! Now execute to get token
-                var origCb = params.callback;
-                params.callback = function(tok) {
-                  if (tok && tok.indexOf('P1_') === 0) {
-                    fetch('http://localhost:3099/token', {method:'POST', body:tok});
-                    resolve('token_sent:' + tok.length);
-                  }
-                  if (origCb) origCb(tok);
-                };
-              }
-              return origRender.call(this, container, params);
-            };
-            // Now reload page to trigger fresh turnstile render
-            location.reload();
-            // Timeout fallback
-            setTimeout(function() { resolve('timeout'); }, 15000);
-          });
-        })()`;
-        ws.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression: inject, awaitPromise: true } }));
+      ws.on('open', async () => {
+        // Step 1: Add script that runs BEFORE page loads
+        const interceptScript = `
+          (function() {
+            var _origDefProp = Object.defineProperty;
+            var _turnstile;
+            Object.defineProperty(window, 'turnstile', {
+              get: function() { return _turnstile; },
+              set: function(val) {
+                _turnstile = val;
+                if (val && typeof val.render === 'function') {
+                  var origRender = val.render;
+                  val.render = function(container, params) {
+                    if (params && params.sitekey && typeof params.callback === 'function') {
+                      var origCb = params.callback;
+                      params.callback = function(token) {
+                        if (token && token.indexOf('P1_') === 0) {
+                          fetch('http://localhost:3099/token', {method: 'POST', body: token}).catch(function(){});
+                          console.log('PASSKEY_CAPTURED:' + token.length);
+                        }
+                        origCb(token);
+                      };
+                    }
+                    return origRender.call(this, container, params);
+                  };
+                }
+              },
+              configurable: true
+            });
+          })();
+        `;
+
+        // Add script to run on page load
+        ws.send(JSON.stringify({
+          id: 1,
+          method: 'Page.addScriptToEvaluateOnNewDocument',
+          params: { source: interceptScript }
+        }));
       });
 
+      let step = 0;
+      ws.on('message', (raw) => {
+        step++;
+        if (step === 1) {
+          // Script registered, now reload
+          console.log('[passkey-refresh] interceptor registered, reloading page...');
+          ws.send(JSON.stringify({ id: 2, method: 'Page.reload' }));
+        }
+        if (step === 2) {
+          // Page reloading, enable console monitoring
+          ws.send(JSON.stringify({ id: 3, method: 'Runtime.enable' }));
+        }
+      });
+
+      // Listen for console messages from the page
       ws.on('message', (raw) => {
         try {
-          const data = JSON.parse(raw);
-          const val = data?.result?.result?.value || '';
-          console.log('[passkey-refresh] result:', val);
-          if (val.startsWith('token_sent')) {
-            if (!resolved) { resolved = true; clearTimeout(timeout); ws.close(); }
-            // Wait for passkey-server to process
-            setTimeout(() => resolve(true), 3000);
+          const msg = JSON.parse(raw);
+          if (msg.method === 'Runtime.consoleAPICalled') {
+            const text = msg.params?.args?.[0]?.value || '';
+            if (text.startsWith('PASSKEY_CAPTURED:')) {
+              console.log('[passkey-refresh] token captured!', text);
+              // Wait for passkey-server to process
+              setTimeout(() => {
+                try { ws.close(); } catch {}
+                done(true);
+              }, 3000);
+            }
           }
         } catch {}
       });
 
-      ws.on('error', () => {
-        if (!resolved) { resolved = true; clearTimeout(timeout); resolve(false); }
-      });
-
-      ws.on('close', () => {
-        // Page reloaded — websocket disconnects. Reconnect after reload
-        setTimeout(async () => {
-          if (resolved) return;
-          try {
-            // After reload, check if token was captured
-            const tabsRes2 = await fetch(`${CDP_URL}/json/list`);
-            const tabs2 = await tabsRes2.json();
-            const tab2 = tabs2.find(t => t.url?.includes('suno.com'));
-            if (!tab2) { if (!resolved) { resolved = true; resolve(false); } return; }
-
-            const ws2 = new WebSocket(tab2.webSocketDebuggerUrl);
-            ws2.on('open', () => {
-              // Just check if passkey-server got a token recently
-              ws2.close();
-              setTimeout(async () => {
-                try {
-                  const h = await fetch('http://localhost:3099/health');
-                  if (!resolved) { resolved = true; clearTimeout(timeout); resolve(h.ok); }
-                } catch {
-                  if (!resolved) { resolved = true; clearTimeout(timeout); resolve(false); }
-                }
-              }, 5000);
-            });
-            ws2.on('error', () => {
-              if (!resolved) { resolved = true; clearTimeout(timeout); resolve(false); }
-            });
-          } catch {
-            if (!resolved) { resolved = true; clearTimeout(timeout); resolve(false); }
-          }
-        }, 5000);
-      });
+      ws.on('error', () => done(false));
     });
   } catch (e) {
     console.log('[passkey-refresh] error:', e.message);
