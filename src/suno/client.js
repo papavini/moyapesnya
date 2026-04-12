@@ -140,22 +140,33 @@ export async function pingSuno() {
 }
 
 /**
- * Проверяет что токен жив. Если нет — дёргает keepAlive через get_limit (до 3 попыток).
- * Вызывай перед генерацией.
+ * Проверяет что токен жив и обновляет passkey перед генерацией.
  */
 export async function ensureTokenAlive() {
+  // 1. Check API is reachable
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const res = await fetch(`${config.suno.base}/api/get_limit`);
-      if (res.ok) return true;
-      console.log(`[suno] токен проверка попытка ${attempt}: HTTP ${res.status}`);
+      if (res.ok) break;
+      console.log(`[suno] проверка попытка ${attempt}: HTTP ${res.status}`);
     } catch (e) {
-      console.log(`[suno] токен проверка попытка ${attempt}: ${e.message}`);
+      console.log(`[suno] проверка попытка ${attempt}: ${e.message}`);
+      if (attempt === 3) return false;
     }
-    // Ждём перед ретраем — даём keepAlive сработать
     if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
   }
-  return false;
+
+  // 2. Refresh passkey token via CDP before generation
+  try {
+    const { refreshPasskeyToken } = await import('./refresh-passkey.js');
+    console.log('[suno] refreshing passkey token...');
+    await refreshPasskeyToken();
+    console.log('[suno] passkey refreshed');
+  } catch (e) {
+    console.log('[suno] passkey refresh skipped:', e.message);
+  }
+
+  return true;
 }
 
 export { SunoError };
