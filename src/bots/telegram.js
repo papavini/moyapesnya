@@ -235,9 +235,11 @@ export function createTelegramBot() {
     const lyricsMsg = await ctx.reply('✍️ Сочиняю текст вашей песни…');
     let aiResult;
     try {
+      console.log('[telegram] calling generateLyrics...');
       aiResult = await generateLyrics({ occasion, genre, mood, voice, wishes });
+      console.log('[telegram] AI OK, lyrics:', aiResult.lyrics?.substring(0, 50));
     } catch (e) {
-      console.error('[telegram] AI ошибка:', e.message);
+      console.error('[telegram] AI ошибка:', e.message, e.stack?.substring(0, 200));
       await ctx.api.editMessageText(lyricsMsg.chat.id, lyricsMsg.message_id,
         '⚠️ Генератор текста временно недоступен, создаём по описанию…');
       setState(PLATFORM, ctx.from.id, 'generating');
@@ -597,6 +599,7 @@ export function createTelegramBot() {
 }
 
 async function handleGenerate(ctx, opts) {
+  console.log('[telegram] handleGenerate called, mode:', opts.mode, 'has lyrics:', !!opts.lyrics);
   // Мотивационное сообщение
   await ctx.reply(
     '🥺 Не каждый подарок умеет говорить "я рядом"…\n\n' +
