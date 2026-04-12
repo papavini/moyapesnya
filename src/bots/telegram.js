@@ -229,6 +229,7 @@ export function createTelegramBot() {
     await ctx.answerCallbackQuery();
     try { await ctx.deleteMessage(); } catch {}
     const session = getSession(PLATFORM, ctx.from.id);
+    console.log('[telegram] confirm_create, state:', session.state, 'data keys:', Object.keys(session.data));
     const { occasion, genre, mood, voice, wishes } = session.data;
 
     const lyricsMsg = await ctx.reply('✍️ Сочиняю текст вашей песни…');
@@ -426,6 +427,7 @@ export function createTelegramBot() {
     }
 
     if (session.state === 'awaiting_wishes') {
+      console.log('[telegram] awaiting_wishes → confirm, data:', JSON.stringify(session.data).substring(0, 200));
       setState(PLATFORM, userId, 'confirm', { wishes: text });
       const { occasion, genre, mood, voice } = session.data;
       await ctx.reply(
@@ -526,7 +528,10 @@ export function createTelegramBot() {
     );
   });
 
-  bot.catch((err) => console.error('[telegram]', err));
+  bot.catch((err) => {
+    console.error('[telegram] ERROR:', err.message || err);
+    if (err.error) console.error('[telegram] cause:', err.error);
+  });
 
   // Экспортируем метод для webhook — авто-генерация после оплаты
   bot._handlePaidGeneration = async (payment) => {
