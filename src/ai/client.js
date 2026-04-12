@@ -1,4 +1,4 @@
-import { fetch } from 'undici';
+// Using Node 22 built-in fetch (not undici — undici fetch fails in Docker)
 import { config } from '../config.js';
 
 const SYSTEM_PROMPT = `Ты — профессиональный автор песен на русском языке. Твоя задача — написать текст песни по запросу.
