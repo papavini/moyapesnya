@@ -1,9 +1,9 @@
 /**
- * Обновляет passkey token через CDP:
- * 1. Инжектит скрипт через Page.addScriptToEvaluateOnNewDocument (ДО загрузки)
- * 2. Перезагружает страницу
- * 3. Скрипт перехватывает turnstile.render → получает sitekey → execute → token
- * НЕ кликает Create, НЕ тратит кредиты.
+ * Обновляет passkey token:
+ * 1. Через CDP блокирует запросы к generate API (Fetch.enable)
+ * 2. Кликает Create
+ * 3. Turnstile генерирует токен → перехватываем
+ * 4. Запрос к SUNO API блокируется на уровне CDP — кредиты НЕ тратятся
  */
 
 const CDP_URL = 'http://127.0.0.1:9222';
@@ -22,89 +22,97 @@ export async function refreshPasskeyToken() {
 
     return new Promise((resolve) => {
       let resolved = false;
-      const done = (val) => {
-        if (resolved) return;
-        resolved = true;
-        clearTimeout(timeout);
-        resolve(val);
-      };
-      const timeout = setTimeout(() => done(false), 25000);
+      const done = (val) => { if (resolved) return; resolved = true; clearTimeout(timeout); resolve(val); };
+      const timeout = setTimeout(() => { console.log('[passkey-refresh] timeout'); done(false); }, 20000);
 
       const ws = new WebSocket(sunoTab.webSocketDebuggerUrl);
 
-      ws.on('open', async () => {
-        // Step 1: Add script that runs BEFORE page loads
-        const interceptScript = `
-          (function() {
-            var _origDefProp = Object.defineProperty;
-            var _turnstile;
-            Object.defineProperty(window, 'turnstile', {
-              get: function() { return _turnstile; },
-              set: function(val) {
-                _turnstile = val;
-                if (val && typeof val.render === 'function') {
-                  var origRender = val.render;
-                  val.render = function(container, params) {
-                    if (params && params.sitekey && typeof params.callback === 'function') {
-                      var origCb = params.callback;
-                      params.callback = function(token) {
-                        if (token && token.indexOf('P1_') === 0) {
-                          fetch('http://localhost:3099/token', {method: 'POST', body: token}).catch(function(){});
-                          console.log('PASSKEY_CAPTURED:' + token.length);
-                        }
-                        origCb(token);
-                      };
-                    }
-                    return origRender.call(this, container, params);
-                  };
-                }
-              },
-              configurable: true
-            });
-          })();
-        `;
-
-        // Add script to run on page load
+      ws.on('open', () => {
+        // Step 1: Enable Fetch domain to intercept network requests
         ws.send(JSON.stringify({
           id: 1,
-          method: 'Page.addScriptToEvaluateOnNewDocument',
-          params: { source: interceptScript }
+          method: 'Fetch.enable',
+          params: {
+            patterns: [{ urlPattern: '*studio-api-prod.suno.com/api/generate*', requestStage: 'Request' }]
+          }
         }));
       });
 
-      let step = 0;
-      ws.on('message', (raw) => {
-        step++;
-        if (step === 1) {
-          // Script registered, now reload
-          console.log('[passkey-refresh] interceptor registered, reloading page...');
-          ws.send(JSON.stringify({ id: 2, method: 'Page.reload' }));
-        }
-        if (step === 2) {
-          // Page reloading, enable console monitoring
-          ws.send(JSON.stringify({ id: 3, method: 'Runtime.enable' }));
-        }
-      });
+      let fetchEnabled = false;
 
-      // Listen for console messages from the page
       ws.on('message', (raw) => {
-        try {
-          const msg = JSON.parse(raw);
-          if (msg.method === 'Runtime.consoleAPICalled') {
-            const text = msg.params?.args?.[0]?.value || '';
-            if (text.startsWith('PASSKEY_CAPTURED:')) {
-              console.log('[passkey-refresh] token captured!', text);
-              // Wait for passkey-server to process
-              setTimeout(() => {
-                try { ws.close(); } catch {}
-                done(true);
-              }, 3000);
+        const msg = JSON.parse(raw);
+
+        // Fetch.enable response
+        if (msg.id === 1 && !msg.error) {
+          fetchEnabled = true;
+          console.log('[passkey-refresh] network intercept enabled');
+
+          // Step 2: Inject turnstile interceptor
+          const inject = `(function(){
+            if(window.__pkRefresh) return 'exists';
+            window.__pkRefresh = true;
+            function p(t){
+              if(!t||t.__pkR2) return;
+              t.__pkR2 = 1;
+              var e = t.execute.bind(t);
+              t.execute = function(s, params) {
+                if(params && typeof params.callback === 'function') {
+                  var cb = params.callback;
+                  params.callback = function(tok) {
+                    if(tok && tok.indexOf('P1_') === 0) {
+                      fetch('http://localhost:3099/token', {method:'POST', body:tok});
+                    }
+                    cb(tok);
+                  };
+                }
+                return e(s, params);
+              };
             }
-          }
-        } catch {}
+            if(window.turnstile) p(window.turnstile);
+            return 'ok';
+          })()`;
+          ws.send(JSON.stringify({ id: 2, method: 'Runtime.evaluate', params: { expression: inject } }));
+        }
+
+        // Inject response → click Create
+        if (msg.id === 2) {
+          const click = `var b=Array.from(document.querySelectorAll('button')).find(x=>x.textContent.includes('Create'));b?(b.click(),'clicked'):'no btn'`;
+          ws.send(JSON.stringify({ id: 3, method: 'Runtime.evaluate', params: { expression: click } }));
+        }
+
+        // Click response
+        if (msg.id === 3) {
+          const val = msg?.result?.result?.value || '';
+          console.log('[passkey-refresh] click:', val);
+        }
+
+        // Fetch.requestPaused — block the generate request!
+        if (msg.method === 'Fetch.requestPaused') {
+          const requestId = msg.params.requestId;
+          const url = msg.params.request.url;
+          console.log('[passkey-refresh] BLOCKED request:', url.substring(0, 80));
+
+          // Fail the request — don't let it through to SUNO
+          ws.send(JSON.stringify({
+            id: 100,
+            method: 'Fetch.failRequest',
+            params: { requestId, errorReason: 'BlockedByClient' }
+          }));
+
+          // Token should have been captured by now, wait for passkey-server
+          setTimeout(() => {
+            // Disable fetch interception
+            ws.send(JSON.stringify({ id: 101, method: 'Fetch.disable' }));
+            setTimeout(() => {
+              try { ws.close(); } catch {}
+              done(true);
+            }, 3000);
+          }, 2000);
+        }
       });
 
-      ws.on('error', () => done(false));
+      ws.on('error', (e) => { console.log('[passkey-refresh] ws error:', e.message); done(false); });
     });
   } catch (e) {
     console.log('[passkey-refresh] error:', e.message);
