@@ -6,6 +6,7 @@ import {
   generateByDescription,
   generateCustom,
   waitForClips,
+  ensureTokenAlive,
 } from '../suno/client.js';
 import { config } from '../config.js';
 
@@ -21,6 +22,16 @@ import { config } from '../config.js';
  */
 export async function runGeneration(opts) {
   const status = opts.onStatus ?? (() => {});
+
+  await status('Проверяю готовность студии…');
+
+  const alive = await ensureTokenAlive();
+  if (!alive) {
+    return {
+      ok: false,
+      error: 'Сессия SUNO истекла. Попробуйте через минуту или обратитесь к администратору.',
+    };
+  }
 
   await status('Отправляю задание в SUNO…');
 

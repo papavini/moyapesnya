@@ -139,4 +139,23 @@ export async function pingSuno() {
   }
 }
 
+/**
+ * Проверяет что токен жив. Если нет — дёргает keepAlive через get_limit (до 3 попыток).
+ * Вызывай перед генерацией.
+ */
+export async function ensureTokenAlive() {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch(`${config.suno.base}/api/get_limit`);
+      if (res.ok) return true;
+      console.log(`[suno] токен проверка попытка ${attempt}: HTTP ${res.status}`);
+    } catch (e) {
+      console.log(`[suno] токен проверка попытка ${attempt}: ${e.message}`);
+    }
+    // Ждём перед ретраем — даём keepAlive сработать
+    if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
+  }
+  return false;
+}
+
 export { SunoError };
