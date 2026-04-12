@@ -82,7 +82,9 @@ function q2Keyboard() {
     .text('🏰 В стиле Disney', 'q2:Disney, сказочный')
     .text('🎸 Под гитару', 'q2:акустика, гитара')
     .row()
-    .text('💃 Танцевальная музыка', 'q2:танцевальный, электронный');
+    .text('💃 Танцевальная музыка', 'q2:танцевальный, электронный')
+    .row()
+    .text('✏️ Свой стиль', 'q2:custom');
 }
 
 function q3Keyboard() {
@@ -188,7 +190,13 @@ export function createTelegramBot() {
   bot.callbackQuery(/^q2:(.+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
     try { await ctx.deleteMessage(); } catch {}
-    setState(PLATFORM, ctx.from.id, 'awaiting_mood', { genre: ctx.match[1] });
+    const val = ctx.match[1];
+    if (val === 'custom') {
+      setState(PLATFORM, ctx.from.id, 'awaiting_genre_custom');
+      await ctx.reply('✏️ Опишите стиль музыки словами, или надиктуйте голосом 🎙\n\nНапример: «лёгкий джаз с саксофоном» или «как у Земфиры»');
+      return;
+    }
+    setState(PLATFORM, ctx.from.id, 'awaiting_mood', { genre: val });
     await ctx.reply(
       'Вопрос 3/5. Отлично! Теперь выберите настроение для вашей песни☝️',
       { reply_markup: q3Keyboard() },
@@ -405,6 +413,15 @@ export function createTelegramBot() {
       await ctx.reply('Вопрос 2/5. Выберите жанр для вашей песни☝️', {
         reply_markup: q2Keyboard(),
       });
+      return;
+    }
+
+    if (session.state === 'awaiting_genre_custom') {
+      setState(PLATFORM, userId, 'awaiting_mood', { genre: text });
+      await ctx.reply(
+        'Вопрос 3/5. Отлично! Теперь выберите настроение для вашей песни☝️',
+        { reply_markup: q3Keyboard() },
+      );
       return;
     }
 

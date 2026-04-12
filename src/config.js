@@ -38,7 +38,7 @@ export const config = {
   songPrice: num(process.env.SONG_PRICE, 299),
   webhookPort: num(process.env.WEBHOOK_PORT, 8080),
   webhookHost: process.env.WEBHOOK_HOST || '',
-  paywallEnabled: bool(process.env.PAYWALL_ENABLED, true),
+  paywallEnabled: bool(process.env.PAYWALL_ENABLED, false),
 };
 
 export function assertBotConfig(which) {
