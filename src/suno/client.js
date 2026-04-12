@@ -156,16 +156,6 @@ export async function ensureTokenAlive() {
     if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
   }
 
-  // 2. Refresh passkey token via CDP before generation
-  try {
-    const { refreshPasskeyToken } = await import('./refresh-passkey.js');
-    console.log('[suno] refreshing passkey token...');
-    await refreshPasskeyToken();
-    console.log('[suno] passkey refreshed');
-  } catch (e) {
-    console.log('[suno] passkey refresh skipped:', e.message);
-  }
-
   return true;
 }
 
