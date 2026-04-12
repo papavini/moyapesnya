@@ -1,214 +1,176 @@
-# Подари Трек — Telegram-бот для продажи персональных песен
+# Подари Песню! — Telegram-бот для создания персональных песен
 
-Telegram-бот (@chingaresendbot / @podaritrackAi_bot), который ведёт пользователя через 5 вопросов, генерирует промпт и возвращает готовый трек из SUNO. MVP без оплаты — сначала отлаживаем флоу, монетизация подключается позже.
+Telegram-бот `@podaripesniu_bot`, который ведёт пользователя через 5 вопросов, генерирует текст песни через AI (Gemini), и превращает его в настоящую песню через SUNO.
+
+**GitHub:** [papavini/moyapesnya](https://github.com/papavini/moyapesnya)
+
+---
 
 ## Архитектура
 
-Три сервиса в Docker на мини ПК (192.168.0.128, Debian 13):
+Мини ПК `192.168.0.128` (Debian 13, 4 ядра, 16GB RAM):
 
 ```
 Пользователь Telegram
         │
         ▼
-┌──────────────────────┐
-│  SUNO Бот Sales      │  Node.js 22 + grammY
-│  src/bots/telegram.js│  long-polling
-│  Docker: suno-bot    │
-└──────────┬───────────┘
-           │ HTTP localhost:3000
-           ▼
-┌──────────────────────┐
-│  suno-api            │  Next.js (gcui-art/suno-api)
-│  Docker: suno-api    │  обёртка над SUNO
-│  localhost:3000      │
-└──────────┬───────────┘
-           │ HTTPS API
-           ▼
-       suno.com
+┌───────────────────────────┐
+│  Telegram Bot (Docker)    │  Node.js 22 + grammY 1.30
+│  @podaripesniu_bot        │  long-polling
+│  контейнер: suno-bot      │
+└───────────┬───────────────┘
+            │
+    ┌───────┴───────┐
+    │               │
+    ▼               ▼
+┌────────────┐  ┌─────────────────┐
+│ OpenRouter │  │ suno-api        │  Next.js (native, systemd)
+│ Gemini 3.1 │  │ localhost:3000  │  обёртка над SUNO
+│ Flash Lite │  │ Cookies → file  │
+└────────────┘  └────────┬────────┘
+                         │ HTTPS
+                         ▼
+                     suno.com
 
-┌──────────────────────┐
-│  Gemini Flash Lite   │  google/gemini-3.1-flash-lite-preview
-│  через OpenRouter    │  генерация текстов песен + STT
-└──────────────────────┘
+┌──────────────────────────────┐
+│  Cloudflare Tunnel (systemd) │
+│  pay.vrodnikah.ru → :8080    │  для Robokassa webhook
+└──────────────────────────────┘
 ```
 
-**Сервис 1 — бот** (`SUNO Бот Sales/`):
-- Ведёт диалог с пользователем (приветственное видео + 5 вопросов)
-- Собирает ответы → AI генерирует текст песни → вызывает suno-api
-- Pre-flight проверка токена перед генерацией (ensureTokenAlive)
-- Опрашивает suno-api каждые 5 сек до готовности трека
-- Отправляет аудиофайл пользователю
-- Кнопки удаляются после выбора, blockquote стиль
+### Сервисы на мини ПК
 
-**Сервис 2 — suno-api** (`suno-api/`):
-- Прокси-обёртка над SUNO. Форк: [papavini/suno-api](https://github.com/papavini/suno-api)
-- Авторизуется через cookie (passkey token НЕ нужен для Pro Plan!)
-- Эндпоинты: `POST /api/generate`, `POST /api/custom_generate`, `GET /api/get?ids=`, `GET /api/get_limit`
-
-**Сервис 3 — AI-генерация текстов** (планируется):
-- Модель: `google/gemini-3.1-flash-lite-preview` через OpenRouter API
-- Генерация текстов песен из пожеланий пользователя
-- STT: расшифровка голосовых сообщений в текст
+| Сервис | Тип | Порт | Управление |
+|---|---|---|---|
+| **suno-bot** | Docker | — (long-polling) | `docker compose restart bot` |
+| **suno-api** | systemd (native) | 3000 | `sudo systemctl restart suno-api` |
+| **cloudflared** | systemd | — | `sudo systemctl restart cloudflared` |
+| **passkey-server** | systemd | 3099 | `sudo systemctl restart passkey-server` |
+| **webhook** | внутри бота | 8080 | перезапуск вместе с ботом |
 
 ---
 
-## Флоу пользователя (5 вопросов)
+## Стек технологий
+
+| Компонент | Технология |
+|---|---|
+| Бот | Node.js 22, grammY 1.30, undici |
+| AI тексты | google/gemini-3.1-flash-lite-preview через OpenRouter |
+| Музыка | SUNO (suno.com) через suno-api (gcui-art/suno-api fork) |
+| Оплата | Robokassa (подготовлено, тестовый режим) |
+| Webhook tunnel | Cloudflare Tunnel → pay.vrodnikah.ru |
+| Контейнеризация | Docker (бот), systemd (suno-api, cloudflared) |
+| DNS | Cloudflare (vrodnikah.ru) |
+
+---
+
+## Флоу пользователя
 
 ```
 /start
-  └─► Приветственное видео + blockquote текст + кнопка "Создать свою песню" (красная)
-        └─► Q1: Повод (8 кнопок + Свой вариант) — кнопки исчезают после выбора
-              └─► Q2: Жанр (7 кнопок)
-                    └─► Q3: Настроение (4 кнопки)
-                          └─► Q4: Голос (Мужской / Женский)
-                                └─► Q5: Свободный текст (пожелания)
-                                      └─► Подтверждение (итог всех выборов)
-                                            └─► "Создать песню" (красная) / "Внести правки"
-                                                  └─► Pre-flight проверка токена
-                                                        └─► Мотивационное сообщение
-                                                              └─► Прогресс-бар ❤️🖤
-                                                                    └─► 2 аудиофайла MP3
+  └─► Приветственное видео + blockquote текст
+        └─► 🔥 "Создать свою песню" (красная кнопка)
+              └─► Q1: Повод (8 кнопок + Свой вариант)
+                    └─► Q2: Жанр (7 кнопок + Свой стиль)
+                          └─► Q3: Настроение (4 кнопки)
+                                └─► Q4: Голос (Мужской 🔴 / Женский 🟢)
+                                      └─► Q5: Пожелания (текст или 🎙 голос)
+                                            └─► Подтверждение (итог выборов)
+                                                  └─► 🔥 "Создать текст песни"
+                                                        └─► ✍️ AI генерирует текст (Gemini)
+                                                              └─► 📝 Показ текста + мотивация
+                                                                    ├─► 🔥 "Создать песню" → SUNO
+                                                                    └─► 📝 "Изменить текст" → AI правки
+                                                                          └─► Обновлённый текст
+                                                                                └─► 🔥 "Создать песню"
+                                                                                      └─► [ОПЛАТА 299₽]*
+                                                                                            └─► Прогресс ❤️🖤
+                                                                                                  └─► 🎵 MP3
 ```
 
-Ответы накапливаются в сессии через `setState` (merge-патч). После Q5 вызывается `buildPrompt`:
+*Оплата пока отключена (`PAYWALL_ENABLED=false`). Robokassa подготовлена.
 
-```js
-`Создай полноценную душевную песню на русском языке.
-Повод: ${occasion}. Жанр: ${genre}. Настроение: ${mood}. ${voice}.
-Пожелания и история: ${wishes}.
-Сделай трогательно, с припевом, куплетами и бриджем. Упомяни имя и детали из истории.`
-```
+### Особенности UI
+- Видео кешируется через `file_id` (не загружается повторно)
+- Кнопки удаляются после нажатия (чистый чат)
+- Все тексты в `<blockquote>` с HTML parse_mode
+- Красные/зелёные кнопки через `.danger()` / `.success()`
+- Везде упоминание 🎙 микрофона (STT в планах)
+- Ошибки скрывают бэкенд (нет "SUNO" в сообщениях пользователю)
 
 ---
 
-## Требования
+## Установка (мини ПК)
 
-- Node.js 20+
-- Запущенный suno-api (localhost:3000)
-- Аккаунт на suno.com с активной подпиской
-
----
-
-## Установка
-
-### 1. suno-api
+### 1. suno-api (нативно, не Docker)
 
 ```bash
-git clone https://github.com/gcui-art/suno-api.git
+cd ~/projects
+git clone -b feature/passkey-automation https://github.com/papavini/suno-api.git
 cd suno-api
 npm install
-```
-
-Заполни `.env` (см. `suno-api/SETUP.md`):
-
-```env
-SUNO_COOKIE=<полная cookie-строка с suno.com>
-SUNO_PASSKEY_TOKEN=<P1_eyJ... — см. ниже как получить>
-SUNO_USER_TIER=<UUID тира — из cookie __session>
-SUNO_CREATE_SESSION_TOKEN=<UUID — из cookie>
-BROWSER=chromium
-BROWSER_HEADLESS=true
-TWOCAPTCHA_KEY=
-```
-
-Собери и запусти:
-
-```bash
 npm run build
-npm start
-# Должен слушать на :3000
-# Проверка: curl http://localhost:3000/api/get_limit
 ```
 
-### 2. Бот
+Cookie извлекаются из Chromium через CDP:
+```bash
+# На мини ПК с GUI:
+chromium --remote-debugging-port=9222 --remote-allow-origins=* https://suno.com/create &
+
+# Извлечь cookies (Python):
+python3 extract_cookies.py  # → сохраняет в ~/projects/suno_cookie.txt
+```
+
+Systemd сервис:
+```bash
+sudo systemctl enable suno-api
+sudo systemctl start suno-api
+```
+
+### 2. Бот (Docker)
 
 ```bash
-cd "SUNO Бот Sales"
-npm install
-cp .env.example .env
-```
-
-Заполни `.env`:
-
-```env
-TELEGRAM_BOT_TOKEN=123456:ABC...   # от @BotFather
-SUNO_API_BASE=http://localhost:3000
-SUNO_POLL_TIMEOUT_SEC=480
-SUNO_POLL_INTERVAL_SEC=5
-SUNO_SEND_FIRST_ONLY=false
-PAYWALL_ENABLED=false
-```
-
-Запусти:
-
-```bash
-npm run start:tg
-```
-
----
-
-## Запуск на Linux (продакшн) — Docker
-
-Деплой на мини ПК (192.168.0.128, Debian 13, Docker 29.4):
-
-```bash
-ssh alexander@192.168.0.128
+cd ~/projects/moyapesnya
+git pull
 cd ~/projects
-
-# Структура:
-# ~/projects/docker-compose.yml
-# ~/projects/moyapesnya/     — бот (papavini/moyapesnya)
-# ~/projects/suno-api/       — API (papavini/suno-api, ветка feature/passkey-automation)
-
-# Сборка и запуск
-docker compose build
-docker compose up -d
-
-# Проверка
-docker ps
-docker logs suno-bot --tail 20
-docker logs suno-api --tail 20
-curl http://localhost:3000/api/get_limit
-
-# Обновление бота после git push
-cd ~/projects/moyapesnya && git pull
-cd ~/projects && docker compose build bot && docker compose up -d --force-recreate bot
+docker compose build bot
+docker compose up -d bot
 ```
 
-> **Важно:** Docker bridge network не работает на этом сервере (HTTP заблокирован). Используется `network_mode: host` + `build.network: host`.
+### 3. Cloudflare Tunnel
+
+```bash
+sudo systemctl enable cloudflared
+sudo systemctl start cloudflared
+# pay.vrodnikah.ru → localhost:8080
+```
 
 ---
 
-## Переменные окружения бота
+## Переменные окружения
+
+### Бот (`moyapesnya/.env`)
 
 | Переменная | Обязательна | Описание |
 |---|---|---|
-| `TELEGRAM_BOT_TOKEN` | Да | Токен от @BotFather |
+| `TELEGRAM_BOT_TOKEN` | Да | `8527511589:AAFM4se...` от @BotFather |
 | `SUNO_API_BASE` | Нет | URL suno-api (дефолт: `http://localhost:3000`) |
-| `SUNO_POLL_TIMEOUT_SEC` | Нет | Таймаут ожидания трека, сек (дефолт: 240) |
-| `SUNO_POLL_INTERVAL_SEC` | Нет | Интервал опроса, сек (дефолт: 5) |
-| `SUNO_SEND_FIRST_ONLY` | Нет | Отправлять только первый клип из двух (дефолт: false) |
-| `PAYWALL_ENABLED` | Нет | Включить оплату (дефолт: false, MVP) |
-| `VK_GROUP_TOKEN` | Нет | Токен VK (бот запустится без него) |
-| `VK_GROUP_ID` | Нет | ID группы VK |
+| `OPENROUTER_API_KEY` | Да | Ключ OpenRouter для AI генерации текстов |
+| `AI_MODEL` | Нет | Дефолт: `google/gemini-3.1-flash-lite-preview` |
+| `SUNO_POLL_TIMEOUT_SEC` | Нет | Таймаут ожидания трека (дефолт: 480) |
+| `SUNO_POLL_INTERVAL_SEC` | Нет | Интервал опроса (дефолт: 5) |
+| `SUNO_SEND_FIRST_ONLY` | Нет | Только 1 клип из 2 (дефолт: false) |
+| `PAYWALL_ENABLED` | Нет | Включить оплату (дефолт: false) |
+| `ROBOKASSA_MERCHANT_ID` | Нет | ID магазина Robokassa |
+| `ROBOKASSA_PASSWORD1` | Нет | Пароль #1 для подписи |
+| `ROBOKASSA_PASSWORD2` | Нет | Пароль #2 для проверки |
+| `ROBOKASSA_TEST_MODE` | Нет | Тестовый режим (дефолт: true) |
+| `SONG_PRICE` | Нет | Цена песни в рублях (дефолт: 299) |
+| `WEBHOOK_PORT` | Нет | Порт webhook сервера (дефолт: 8080) |
 
----
+### suno-api
 
-## Passkey token SUNO
-
-> **Pro Plan аккаунты НЕ нуждаются в passkey токене!** SUNO веб-клиент отправляет `"token": null` для Pro Plan. Наш suno-api работает без токена.
-
-Если что-то сломается — cookie (`SUNO_COOKIE`) нужно обновить вручную из браузера. `keepAlive()` в suno-api автоматически обновляет JWT сессию.
-
----
-
-## Команды бота
-
-| Команда | Описание |
-|---|---|
-| `/start` | Запустить диалог заново |
-| `/cancel` | Отменить текущий диалог |
-| `/ping` | Проверить связь с SUNO (показывает кредиты) |
+Cookie читаются из файла `~/projects/suno_cookie.txt` (не из .env — Docker ломает `$` в cookie-строке).
 
 ---
 
@@ -217,91 +179,158 @@ cd ~/projects && docker compose build bot && docker compose up -d --force-recrea
 ```
 SUNO Бот Sales/
 ├── src/
-│   ├── index.js           # entrypoint: поднимает ботов, SIGINT/SIGTERM
-│   ├── config.js          # загрузка .env, дефолты
-│   ├── store.js           # in-memory сессии: state + data через setState
+│   ├── index.js              # entrypoint: бот + webhook сервер
+│   ├── config.js             # .env → config объект
+│   ├── store.js              # in-memory сессии + платежи
 │   ├── assets/
-│   │   └── welcome.mp4    # приветственное видео (10MB, кешируется file_id)
+│   │   ├── welcome.mp4       # приветственное видео (10MB)
+│   │   └── .video_file_id    # кеш Telegram file_id
+│   ├── ai/
+│   │   └── client.js         # OpenRouter API → Gemini Flash Lite
 │   ├── suno/
-│   │   └── client.js      # HTTP-клиент к suno-api + ensureTokenAlive()
+│   │   └── client.js         # HTTP клиент к suno-api + ensureTokenAlive()
+│   ├── payment/
+│   │   └── robokassa.js      # генерация URL оплаты, проверка MD5 подписи
+│   ├── server/
+│   │   └── webhook.js        # HTTP сервер :8080 для Robokassa callback
 │   ├── flow/
-│   │   └── generate.js    # submit → pre-flight check → poll → return clips
+│   │   └── generate.js       # pre-flight → submit → poll → return clips
 │   └── bots/
-│       ├── telegram.js    # grammY: видео, blockquote, 5 вопросов, красные кнопки
-│       └── vk.js          # vk-io: аналогичный флоу
+│       ├── telegram.js       # grammY: полный флоу с AI + оплатой
+│       └── vk.js             # vk-io (не тестировался)
 ├── emulator/
-│   ├── index.html         # веб-эмулятор бота для тестирования UI
-│   └── welcome.mp4        # копия видео для эмулятора
-├── Dockerfile             # Docker-образ для бота
-├── .env                   # секреты (в git не включать!)
-├── .env.example           # шаблон
-├── .gitignore
+│   └── index.html            # веб-эмулятор бота (localhost:5555)
+├── Dockerfile                # Docker образ бота
+├── .env.example              # шаблон переменных
 └── package.json
 ```
 
 ---
 
-## Стейт-машина (store.js)
+## Стейт-машина
 
 ```
 idle
-  └─► awaiting_occasion        (Q1: повод)
-        │  └─► awaiting_occasion_custom  (текстовый ввод своего варианта)
-        └─► awaiting_genre            (Q2: жанр)
-              └─► awaiting_mood       (Q3: настроение)
-                    └─► awaiting_voice (Q4: голос)
-                          └─► awaiting_wishes  (Q5: свободный текст)
-                                └─► confirm  (подтверждение с итогом)
-                                      └─► generating  (pre-flight + SUNO)
-                                            └─► idle  (сброс после результата)
+  └─► awaiting_occasion
+        └─► awaiting_occasion_custom (свой вариант)
+        └─► awaiting_genre
+              └─► awaiting_genre_custom (свой стиль)
+              └─► awaiting_mood
+                    └─► awaiting_voice
+                          └─► awaiting_wishes
+                                └─► confirm (итог)
+                                      └─► review_lyrics (AI текст)
+                                            └─► editing_lyrics (правки)
+                                            └─► awaiting_payment (Robokassa)
+                                            └─► generating (SUNO)
+                                                  └─► idle
 ```
 
-`setState(platform, userId, state, patch)` делает merge `data = {...data, ...patch}`, поэтому ответы Q1–Q4 накапливаются и все доступны на шаге Q5.
+---
+
+## Обновление cookies SUNO
+
+Cookies протухают через ~24-48 часов. Обновление:
+
+1. На мини ПК запусти Chromium:
+   ```bash
+   pkill chromium; sleep 2
+   chromium --remote-debugging-port=9222 --remote-allow-origins=* https://suno.com/create &
+   ```
+
+2. Через SSH извлеки cookies:
+   ```bash
+   python3 -c "
+   import json, urllib.request, websocket
+   tabs = json.loads(urllib.request.urlopen('http://127.0.0.1:9222/json/list').read())
+   ws = websocket.create_connection(tabs[0]['webSocketDebuggerUrl'])
+   ws.send(json.dumps({'id':1,'method':'Network.getCookies','params':{'urls':['https://suno.com','https://studio-api-prod.suno.com','https://auth.suno.com']}}))
+   result = json.loads(ws.recv())
+   ws.close()
+   cookies = result['result']['cookies']
+   cookie_str = '; '.join(f\"{c['name']}={c['value']}\" for c in cookies if c.get('value'))
+   open('/home/alexander/projects/suno_cookie.txt','w').write(cookie_str)
+   print(f'OK: {len(cookies)} cookies')
+   "
+   ```
+
+3. Перезапусти suno-api:
+   ```bash
+   sudo systemctl restart suno-api
+   ```
+
+---
+
+## Robokassa (оплата)
+
+| Параметр | Значение |
+|---|---|
+| Merchant ID | `podaripesniu` |
+| Result URL | `https://pay.vrodnikah.ru/robokassa/result` (POST) |
+| Success URL | `https://t.me/podaripesniu_bot` (GET) |
+| Fail URL | `https://t.me/podaripesniu_bot` (GET) |
+| Тестовый режим | Включён (`ROBOKASSA_TEST_MODE=true`) |
+| Цена | 299 руб |
+
+**Статус:** Заявка на активацию подана. Тестовые платежи работают.
+
+Для включения: `PAYWALL_ENABLED=true` в `.env` бота.
 
 ---
 
 ## Кредиты SUNO
 
-- Один запрос генерации = **~30 кредитов** (2 клипа по ~15)
-- Лимит Pro-плана: **2500 кредитов/месяц** ≈ 83 генерации
-- Проверить остаток: `curl http://localhost:3000/api/get_limit`
-- Время генерации: **2–5 минут** (зависит от загрузки серверов SUNO)
+- Один запрос = **~30 кредитов** (2 клипа)
+- Pro Plan: **2500 кредитов/месяц** = ~83 генерации
+- Проверить: `curl http://localhost:3000/api/get_limit`
+- Генерация: **2-5 минут**
+
+---
+
+## Команды бота
+
+| Команда | Описание |
+|---|---|
+| `/start` | Начать заново |
+| `/cancel` | Отменить |
+| `/ping` | Проверка связи + кредиты |
+
+---
+
+## Деплой обновлений
+
+```bash
+# На Windows:
+cd "SUNO Бот Sales"
+git add -A && git commit -m "description" && git push
+
+# На мини ПК (через SSH):
+cd ~/projects/moyapesnya && git pull
+cd ~/projects && docker compose build bot && docker compose up -d --force-recreate bot
+```
 
 ---
 
 ## Траблшутинг
 
-### 422 от SUNO при генерации
-Протух `SUNO_PASSKEY_TOKEN`. Обнови по инструкции выше.
-
-### Бот не отвечает после /start
-- Проверь `TELEGRAM_BOT_TOKEN` в `.env`
-- Убедись что suno-api запущен: `curl http://localhost:3000/api/get_limit`
-
-### Генерация зависла навсегда
-- Дефолтный таймаут 480 сек. После него бот отправит ошибку.
-- Проверь логи suno-api: `journalctl -u suno-api -n 50`
-- Если в логах `Get audio status` повторяется без изменений — suno-api делает polling, но SUNO медленно отвечает. Это нормально.
-
-### replyWithAudio не работает, бот присылает ссылку
-- Telegram не смог подтянуть файл по URL (CDN suno.com иногда требует авторизацию)
-- В коде есть fallback: отправляет текст со ссылкой вместо файла
-
-### После обновления .env изменения не применились
-- suno-api надо **пересобрать**: `npm run build && sudo systemctl restart suno-api`
-- Бот читает `.env` при каждом старте — просто перезапусти: `sudo systemctl restart podaritrack-bot`
+| Проблема | Решение |
+|---|---|
+| `Token validation failed` | Cookies протухли → обновить через CDP (см. выше) |
+| Бот не отвечает | `docker logs suno-bot --tail 20` |
+| suno-api упал | `sudo systemctl status suno-api` + `journalctl -u suno-api -n 30` |
+| Tunnel не работает | `sudo systemctl status cloudflared` + проверить DNS |
+| AI текст не приходит | Проверить `OPENROUTER_API_KEY` в `.env` бота |
+| Docker ломает cookies | suno-api запускать **нативно** (systemd), не Docker |
 
 ---
 
-## TODO (следующие итерации)
+## TODO
 
-- [ ] Оплата: Telegram Stars / ЮKassa / CryptoBot
-- [ ] Тарифы: бесплатный пробник (1 трек) + пакеты
-- [ ] Redis для сессий (сейчас сессии теряются при рестарте)
-- [ ] PostgreSQL/SQLite: пользователи, заказы, история
-- [ ] Rate limiting (анти-абуз)
-- [ ] Автообновление SUNO_PASSKEY_TOKEN (браузерная автоматизация)
-- [ ] Docker Compose (бот + suno-api + redis)
-- [ ] Логирование в файл через pino
-- [ ] Webhook-режим вместо long-polling (для высоких нагрузок)
-- [ ] Поддержка VK (протестировать и отладить)
+- [ ] STT: расшифровка голосовых через Gemini
+- [ ] Активация Robokassa → включить `PAYWALL_ENABLED=true`
+- [ ] Автообновление cookies через cron + CDP
+- [ ] Redis для сессий
+- [ ] PostgreSQL: пользователи, заказы, история
+- [ ] Rate limiting
+- [ ] Webhook-режим бота (вместо long-polling)
+- [ ] VK бот (тестирование)
