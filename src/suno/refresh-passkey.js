@@ -1,85 +1,110 @@
 /**
- * Обновляет passkey token через CDP → passkey-server → suno-api restart.
- * Вызывается перед каждой генерацией.
+ * Обновляет passkey token: перезагружает suno.com/create,
+ * перехватывает turnstile.render → получает sitekey → вызывает execute напрямую.
+ * НЕ кликает Create, НЕ тратит кредиты.
  */
 
-const PASSKEY_SERVER = 'http://localhost:3099';
 const CDP_URL = 'http://127.0.0.1:9222';
 
 export async function refreshPasskeyToken() {
   try {
-    // 1. Get tabs from CDP
     const tabsRes = await fetch(`${CDP_URL}/json/list`);
     const tabs = await tabsRes.json();
     const sunoTab = tabs.find(t => t.url?.includes('suno.com'));
     if (!sunoTab) {
-      console.log('[passkey-refresh] no suno.com tab in CDP');
+      console.log('[passkey-refresh] no suno.com tab');
       return false;
     }
 
-    // 2. Connect via WebSocket and inject interceptor + click Create
     const { default: WebSocket } = await import('ws');
-    const ws = new WebSocket(sunoTab.webSocketDebuggerUrl);
 
     return new Promise((resolve) => {
       let resolved = false;
       const timeout = setTimeout(() => {
-        if (!resolved) { resolved = true; ws.close(); resolve(false); }
-      }, 15000);
+        if (!resolved) { resolved = true; try { ws.close(); } catch {} resolve(false); }
+      }, 20000);
+
+      const ws = new WebSocket(sunoTab.webSocketDebuggerUrl);
 
       ws.on('open', () => {
-        // Intercept fetch to block actual song creation, only capture token
+        // Step 1: Inject script that intercepts turnstile.render to capture sitekey,
+        // then calls execute with that sitekey to get token WITHOUT clicking Create
         const inject = `(function(){
-          if(window.__tokenBlocker) return 'already_installed';
-          window.__tokenBlocker = true;
-          var origFetch = window.fetch;
-          window.__capturedToken = null;
-          window.fetch = function(url, opts) {
-            if(opts && opts.body && typeof opts.body === 'string') {
-              try {
-                var d = JSON.parse(opts.body);
-                if(d.token && d.token.indexOf('P1_') === 0) {
-                  window.__capturedToken = d.token;
-                  fetch('http://localhost:3099/token', {method:'POST',body:d.token});
-                  // Block the actual generate request
-                  return Promise.resolve(new Response('{"blocked":true}', {status:200}));
-                }
-              } catch(e) {}
-            }
-            return origFetch.apply(this, arguments);
-          };
-          return 'blocker_installed';
+          return new Promise(function(resolve) {
+            // Patch render to capture sitekey on next page load
+            var origRender = window.turnstile.render;
+            window.turnstile.render = function(container, params) {
+              var sk = params && params.sitekey;
+              if (sk) {
+                // Got sitekey! Now execute to get token
+                var origCb = params.callback;
+                params.callback = function(tok) {
+                  if (tok && tok.indexOf('P1_') === 0) {
+                    fetch('http://localhost:3099/token', {method:'POST', body:tok});
+                    resolve('token_sent:' + tok.length);
+                  }
+                  if (origCb) origCb(tok);
+                };
+              }
+              return origRender.call(this, container, params);
+            };
+            // Now reload page to trigger fresh turnstile render
+            location.reload();
+            // Timeout fallback
+            setTimeout(function() { resolve('timeout'); }, 15000);
+          });
         })()`;
-        ws.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression: inject } }));
+        ws.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression: inject, awaitPromise: true } }));
       });
 
-      let step = 0;
-      ws.on('message', (data) => {
-        step++;
-        if (step === 1) {
-          // Blocker installed, now click Create to trigger turnstile
-          const click = `var b=Array.from(document.querySelectorAll('button')).find(x=>x.textContent.includes('Create'));b?(b.click(),'clicked'):'no btn'`;
-          ws.send(JSON.stringify({ id: 2, method: 'Runtime.evaluate', params: { expression: click } }));
-        } else if (step === 2) {
-          const result = JSON.parse(data);
-          const val = result?.result?.result?.value || '';
-          console.log('[passkey-refresh] click result:', val);
-          // Wait for passkey-server to receive token
-          setTimeout(async () => {
-            try {
-              const health = await fetch(`${PASSKEY_SERVER}/health`);
-              if (health.ok) {
-                console.log('[passkey-refresh] token refresh triggered');
-                if (!resolved) { resolved = true; clearTimeout(timeout); ws.close(); resolve(true); }
-              }
-            } catch {}
-            if (!resolved) { resolved = true; clearTimeout(timeout); ws.close(); resolve(false); }
-          }, 8000);
-        }
+      ws.on('message', (raw) => {
+        try {
+          const data = JSON.parse(raw);
+          const val = data?.result?.result?.value || '';
+          console.log('[passkey-refresh] result:', val);
+          if (val.startsWith('token_sent')) {
+            if (!resolved) { resolved = true; clearTimeout(timeout); ws.close(); }
+            // Wait for passkey-server to process
+            setTimeout(() => resolve(true), 3000);
+          }
+        } catch {}
       });
 
       ws.on('error', () => {
         if (!resolved) { resolved = true; clearTimeout(timeout); resolve(false); }
+      });
+
+      ws.on('close', () => {
+        // Page reloaded — websocket disconnects. Reconnect after reload
+        setTimeout(async () => {
+          if (resolved) return;
+          try {
+            // After reload, check if token was captured
+            const tabsRes2 = await fetch(`${CDP_URL}/json/list`);
+            const tabs2 = await tabsRes2.json();
+            const tab2 = tabs2.find(t => t.url?.includes('suno.com'));
+            if (!tab2) { if (!resolved) { resolved = true; resolve(false); } return; }
+
+            const ws2 = new WebSocket(tab2.webSocketDebuggerUrl);
+            ws2.on('open', () => {
+              // Just check if passkey-server got a token recently
+              ws2.close();
+              setTimeout(async () => {
+                try {
+                  const h = await fetch('http://localhost:3099/health');
+                  if (!resolved) { resolved = true; clearTimeout(timeout); resolve(h.ok); }
+                } catch {
+                  if (!resolved) { resolved = true; clearTimeout(timeout); resolve(false); }
+                }
+              }, 5000);
+            });
+            ws2.on('error', () => {
+              if (!resolved) { resolved = true; clearTimeout(timeout); resolve(false); }
+            });
+          } catch {
+            if (!resolved) { resolved = true; clearTimeout(timeout); resolve(false); }
+          }
+        }, 5000);
       });
     });
   } catch (e) {
