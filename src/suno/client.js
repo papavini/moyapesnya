@@ -50,23 +50,68 @@ async function get(path) {
 }
 
 export async function generateByDescription(prompt, { instrumental = false } = {}) {
-  const resp = await post('/api/generate', {
-    prompt,
-    make_instrumental: instrumental,
-    wait_audio: false,
-  });
-  return normalizeClipsResponse(resp);
+  try {
+    const resp = await post('/api/generate', {
+      prompt,
+      make_instrumental: instrumental,
+      wait_audio: false,
+    });
+    return normalizeClipsResponse(resp);
+  } catch (e) {
+    if (e.status === 422 || (e.message && e.message.includes('Token'))) {
+      console.log('[suno] token expired, refreshing via CDP...');
+      try {
+        const { refreshPasskeyToken } = await import('./refresh-passkey.js');
+        await refreshPasskeyToken();
+        await new Promise(r => setTimeout(r, 8000));
+      } catch (re) {
+        console.log('[suno] refresh failed:', re.message);
+      }
+      const resp = await post('/api/generate', {
+        prompt,
+        make_instrumental: instrumental,
+        wait_audio: false,
+      });
+      return normalizeClipsResponse(resp);
+    }
+    throw e;
+  }
 }
 
 export async function generateCustom({ lyrics, tags, title, instrumental = false }) {
-  const resp = await post('/api/custom_generate', {
-    prompt: lyrics,
-    tags,
-    title,
-    make_instrumental: instrumental,
-    wait_audio: false,
-  });
-  return normalizeClipsResponse(resp);
+  try {
+    const resp = await post('/api/custom_generate', {
+      prompt: lyrics,
+      tags,
+      title,
+      make_instrumental: instrumental,
+      wait_audio: false,
+    });
+    return normalizeClipsResponse(resp);
+  } catch (e) {
+    // If token expired, refresh and retry once
+    if (e.status === 422 || (e.message && e.message.includes('Token'))) {
+      console.log('[suno] token expired, refreshing via CDP...');
+      try {
+        const { refreshPasskeyToken } = await import('./refresh-passkey.js');
+        await refreshPasskeyToken();
+        // Wait for suno-api to restart with new token
+        await new Promise(r => setTimeout(r, 8000));
+      } catch (re) {
+        console.log('[suno] refresh failed:', re.message);
+      }
+      // Retry
+      const resp = await post('/api/custom_generate', {
+        prompt: lyrics,
+        tags,
+        title,
+        make_instrumental: instrumental,
+        wait_audio: false,
+      });
+      return normalizeClipsResponse(resp);
+    }
+    throw e;
+  }
 }
 
 export async function getClips(ids) {
