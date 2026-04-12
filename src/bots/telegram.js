@@ -260,20 +260,29 @@ export function createTelegramBot() {
     // Показываем текст + мотивация + кнопки
     try { await ctx.api.deleteMessage(lyricsMsg.chat.id, lyricsMsg.message_id); } catch {}
 
-    await ctx.reply(
-      `📝 <b>Текст вашей песни:</b>\n\n${escapeHtml(aiResult.lyrics)}\n\n` +
-      `Как вам?🤩\n\n` +
-      `💎 Этот уникальный текст только ваш! И помните: какой бы он не был прекрасный - <u>это только 20%</u> от того чуда, что вас ждёт!\n\n` +
-      `🔥 <b>Всю магию творит музыка!</b> Возьмите любой мировой хит и без музыки прочтите только текст - это будут самые обычные стихи 🤷\n\n` +
-      `<i>Если нужно - вы можете внести свои коррективы, или добавить какие-то конкретные детали 🤗</i>`,
-      {
-        parse_mode: 'HTML',
-        reply_markup: new InlineKeyboard()
-          .text('🔥 Создать песню с данным текстом', 'create_song').danger()
-          .row()
-          .text('📝 Изменить текст', 'edit_lyrics'),
-      },
-    );
+    try {
+      await ctx.reply(
+        `📝 <b>Текст вашей песни:</b>\n\n${escapeHtml(aiResult.lyrics)}\n\n` +
+        `Как вам?🤩\n\n` +
+        `💎 Этот уникальный текст только ваш! И помните: какой бы он не был прекрасный - <u>это только 20%</u> от того чуда, что вас ждёт!\n\n` +
+        `🔥 <b>Всю магию творит музыка!</b> Возьмите любой мировой хит и без музыки прочтите только текст - это будут самые обычные стихи 🤷\n\n` +
+        `<i>Если нужно - вы можете внести свои коррективы, или добавить какие-то конкретные детали 🤗</i>`,
+        {
+          parse_mode: 'HTML',
+          reply_markup: new InlineKeyboard()
+            .text('🔥 Создать песню с данным текстом', 'create_song').danger()
+            .row()
+            .text('📝 Изменить текст', 'edit_lyrics'),
+        },
+      );
+      console.log('[telegram] lyrics shown to user with buttons');
+      return; // IMPORTANT: stop here, wait for user to click button
+    } catch (e) {
+      console.error('[telegram] FAILED to show lyrics:', e.message);
+      // Fallback — generate directly
+      setState(PLATFORM, ctx.from.id, 'generating');
+      await handleGenerate(ctx, { mode: 'custom', lyrics: aiResult.lyrics, tags: aiResult.tags, title: aiResult.title });
+    }
   });
 
   // Создать песню → оплата
