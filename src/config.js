@@ -29,7 +29,16 @@ export const config = {
     model: process.env.AI_MODEL || 'google/gemini-3.1-flash-lite-preview',
     baseUrl: process.env.AI_BASE_URL || 'https://openrouter.ai/api/v1',
   },
-  paywallEnabled: bool(process.env.PAYWALL_ENABLED, false),
+  robokassa: {
+    merchantId: process.env.ROBOKASSA_MERCHANT_ID || '',
+    pass1: process.env.ROBOKASSA_PASSWORD1 || '',
+    pass2: process.env.ROBOKASSA_PASSWORD2 || '',
+    testMode: bool(process.env.ROBOKASSA_TEST_MODE, true),
+  },
+  songPrice: num(process.env.SONG_PRICE, 299),
+  webhookPort: num(process.env.WEBHOOK_PORT, 8080),
+  webhookHost: process.env.WEBHOOK_HOST || '',
+  paywallEnabled: bool(process.env.PAYWALL_ENABLED, true),
 };
 
 export function assertBotConfig(which) {

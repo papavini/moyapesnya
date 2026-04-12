@@ -2,6 +2,7 @@ import { config } from './config.js';
 import { createTelegramBot } from './bots/telegram.js';
 import { createVkBot } from './bots/vk.js';
 import { pingSuno } from './suno/client.js';
+import { startWebhookServer, onPayment } from './server/webhook.js';
 
 function parseOnly(argv) {
   const arg = argv.find((a) => a.startsWith('--only='));
@@ -34,6 +35,16 @@ async function main() {
         onStart: (botInfo) => console.log(`[telegram] @${botInfo.username} запущен (long-polling)`),
       }).catch((e) => console.error('[telegram] crashed:', e));
       shutdowns.push(() => tg.stop());
+
+      // Webhook для оплаты → авто-генерация
+      if (config.paywallEnabled && config.robokassa.merchantId) {
+        onPayment(async (payment) => {
+          if (payment.platform === 'tg' && tg._handlePaidGeneration) {
+            await tg._handlePaidGeneration(payment);
+          }
+        });
+        startWebhookServer();
+      }
     } catch (e) {
       console.error('[telegram] старт провалился:', e.message);
     }

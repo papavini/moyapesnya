@@ -2,6 +2,7 @@
 // Для прод-версии заменить на Redis / SQLite.
 
 const sessions = new Map(); // key: `${platform}:${userId}` -> { state, data }
+const payments = new Map(); // key: invId -> { platform, userId, status, lyrics, tags, title, ... }
 
 const DEFAULT = () => ({ state: 'idle', data: {} });
 
@@ -24,6 +25,30 @@ export function setState(platform, userId, state, patch = {}) {
 
 export function resetSession(platform, userId) {
   sessions.set(key(platform, userId), DEFAULT());
+}
+
+// --- Payments ---
+
+export function setPayment(invId, data) {
+  payments.set(String(invId), { status: 'pending', createdAt: Date.now(), ...data });
+}
+
+export function getPayment(invId) {
+  return payments.get(String(invId)) || null;
+}
+
+export function setPaymentStatus(invId, status) {
+  const p = payments.get(String(invId));
+  if (p) p.status = status;
+}
+
+export function findPaymentByUser(platform, userId) {
+  for (const [invId, p] of payments) {
+    if (p.platform === platform && p.userId === userId && p.status === 'pending') {
+      return { invId, ...p };
+    }
+  }
+  return null;
 }
 
 // Состояния:

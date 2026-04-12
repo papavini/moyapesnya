@@ -4,6 +4,8 @@ import { getSession, setState, resetSession } from '../store.js';
 import { runGeneration } from '../flow/generate.js';
 import { pingSuno, getCreditsLeft } from '../suno/client.js';
 import { generateLyrics } from '../ai/client.js';
+import { createInvoiceUrl, generateInvId } from '../payment/robokassa.js';
+import { setPayment, getPayment, findPaymentByUser } from '../store.js';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
@@ -263,7 +265,7 @@ export function createTelegramBot() {
     );
   });
 
-  // Создать песню из готового текста
+  // Создать песню → оплата
   bot.callbackQuery('create_song', async (ctx) => {
     await ctx.answerCallbackQuery();
     try { await ctx.deleteMessage(); } catch {}
@@ -272,9 +274,67 @@ export function createTelegramBot() {
       await ctx.reply('Сессия устарела. Нажмите /start чтобы начать заново 🎵');
       return;
     }
+
+    if (!config.paywallEnabled || !config.robokassa.merchantId) {
+      // Оплата выключена — генерируем бесплатно
+      const { lyrics, tags, title } = session.data;
+      setState(PLATFORM, ctx.from.id, 'generating');
+      await handleGenerate(ctx, { mode: 'custom', lyrics, tags, title });
+      return;
+    }
+
+    // Создаём счёт
+    const invId = generateInvId(ctx.from.id);
     const { lyrics, tags, title } = session.data;
-    setState(PLATFORM, ctx.from.id, 'generating');
-    await handleGenerate(ctx, { mode: 'custom', lyrics, tags, title });
+    const payUrl = createInvoiceUrl(invId, config.songPrice, `Песня — Подари Песню!`);
+
+    setPayment(invId, {
+      platform: PLATFORM,
+      userId: ctx.from.id,
+      lyrics, tags, title,
+      amount: config.songPrice,
+    });
+    setState(PLATFORM, ctx.from.id, 'awaiting_payment', { invId });
+
+    await ctx.reply(
+      `💳 <b>Оплата создания песни</b>\n\n` +
+      `Стоимость: <b>${config.songPrice} ₽</b>\n\n` +
+      `После оплаты песня будет создана автоматически и отправлена вам в этот чат! 🎵\n\n` +
+      `<i>Нажмите кнопку ниже для перехода к оплате:</i>`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: new InlineKeyboard()
+          .url(`💳 Оплатить ${config.songPrice} ₽`, payUrl)
+          .row()
+          .text('✅ Я оплатил', 'check_payment')
+          .row()
+          .text('⬅️ Назад к тексту', 'back_to_lyrics'),
+      },
+    );
+  });
+
+  // Проверка оплаты вручную
+  bot.callbackQuery('check_payment', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const session = getSession(PLATFORM, ctx.from.id);
+    const invId = session.data?.invId;
+    if (!invId) {
+      await ctx.answerCallbackQuery({ text: 'Сессия устарела, нажмите /start' });
+      return;
+    }
+    const payment = getPayment(invId);
+    if (payment && payment.status === 'paid') {
+      try { await ctx.deleteMessage(); } catch {}
+      setState(PLATFORM, ctx.from.id, 'generating');
+      await handleGenerate(ctx, {
+        mode: 'custom',
+        lyrics: payment.lyrics,
+        tags: payment.tags,
+        title: payment.title,
+      });
+    } else {
+      await ctx.answerCallbackQuery({ text: '⏳ Оплата ещё не поступила. Подождите немного.', show_alert: true });
+    }
   });
 
   // Изменить текст
@@ -409,6 +469,11 @@ export function createTelegramBot() {
       return;
     }
 
+    if (session.state === 'awaiting_payment') {
+      await ctx.reply('💳 Оплатите заказ по кнопке выше. После оплаты нажмите "Я оплатил" ✅');
+      return;
+    }
+
     if (session.state === 'generating') {
       await ctx.reply('🎧 Уже создаю вашу песню, подождите немного…');
       return;
@@ -445,6 +510,66 @@ export function createTelegramBot() {
   });
 
   bot.catch((err) => console.error('[telegram]', err));
+
+  // Экспортируем метод для webhook — авто-генерация после оплаты
+  bot._handlePaidGeneration = async (payment) => {
+    const { userId, lyrics, tags, title } = payment;
+    setState(PLATFORM, userId, 'generating');
+    try {
+      const ctx = { from: { id: userId } };
+      // Мотивационное сообщение
+      await bot.api.sendMessage(userId,
+        '🥺 Не каждый подарок умеет говорить "я рядом"…\n\n' +
+        'Но <b>песня</b> — умеет.\n\n🎵 Создаём вашу персональную песню!',
+        { parse_mode: 'HTML' });
+
+      const progressMsg = await bot.api.sendMessage(userId,
+        'Начали сочинять вашу песню\n' + heartProgress(10));
+
+      let lastPercent = 10;
+      const editProgress = async (label, percent) => {
+        if (percent === lastPercent) return;
+        lastPercent = percent;
+        try {
+          await bot.api.editMessageText(userId, progressMsg.message_id,
+            `${label}\n${heartProgress(percent)}`);
+        } catch {}
+      };
+
+      const onStatus = async (raw) => {
+        const s = (raw || '').toLowerCase();
+        if (s.includes('queued') || s.includes('submitted')) await editProgress('Начали сочинять', 20);
+        else if (s.includes('generating') || s.includes('streaming')) await editProgress('Превращаем в хит', 55);
+        else if (s.includes('complete')) await editProgress('Финальные штрихи', 90);
+      };
+
+      const result = await runGeneration({ mode: 'custom', lyrics, tags, title, onStatus });
+      resetSession(PLATFORM, userId);
+
+      if (!result.ok) {
+        await bot.api.editMessageText(userId, progressMsg.message_id,
+          '😔 Не получилось создать песню. Попробуйте ещё раз — /start');
+        return;
+      }
+
+      await bot.api.editMessageText(userId, progressMsg.message_id,
+        '🎉 Ваша песня готова!\n' + heartProgress(100));
+
+      for (const clip of result.clips) {
+        const caption = (clip.title ? `🎵 ${clip.title}\n\n` : '🎵 Ваша персональная песня!\n\n') +
+          'Хотите ещё одну? /start';
+        try {
+          await bot.api.sendAudio(userId, clip.audioUrl, { caption });
+        } catch {
+          await bot.api.sendMessage(userId, `🎵 ${clip.title || 'Ваш трек'}\n${clip.audioUrl}\n\nХотите ещё? /start`);
+        }
+      }
+    } catch (e) {
+      console.error('[telegram] paid generation error:', e.message);
+      resetSession(PLATFORM, userId);
+      await bot.api.sendMessage(userId, '😔 Произошла ошибка. Попробуйте /start').catch(() => {});
+    }
+  };
 
   return bot;
 }
