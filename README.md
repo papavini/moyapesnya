@@ -4,38 +4,51 @@ Telegram-бот (@chingaresendbot / @podaritrackAi_bot), который ведё
 
 ## Архитектура
 
-Два отдельных Node.js-сервиса, каждый со своим `.env`:
+Три сервиса в Docker на мини ПК (192.168.0.128, Debian 13):
 
 ```
 Пользователь Telegram
         │
         ▼
 ┌──────────────────────┐
-│  SUNO Бот Sales      │  Node.js + grammY
+│  SUNO Бот Sales      │  Node.js 22 + grammY
 │  src/bots/telegram.js│  long-polling
-│  порт не нужен       │
+│  Docker: suno-bot    │
 └──────────┬───────────┘
-           │ HTTP GET/POST localhost:3000
+           │ HTTP localhost:3000
            ▼
 ┌──────────────────────┐
 │  suno-api            │  Next.js (gcui-art/suno-api)
-│  localhost:3000      │  обёртка над SUNO
+│  Docker: suno-api    │  обёртка над SUNO
+│  localhost:3000      │
 └──────────┬───────────┘
            │ HTTPS API
            ▼
        suno.com
+
+┌──────────────────────┐
+│  Gemini Flash Lite   │  google/gemini-3.1-flash-lite-preview
+│  через OpenRouter    │  генерация текстов песен + STT
+└──────────────────────┘
 ```
 
 **Сервис 1 — бот** (`SUNO Бот Sales/`):
-- Ведёт диалог с пользователем
-- Собирает 5 ответов → строит промпт → вызывает suno-api
+- Ведёт диалог с пользователем (приветственное видео + 5 вопросов)
+- Собирает ответы → AI генерирует текст песни → вызывает suno-api
+- Pre-flight проверка токена перед генерацией (ensureTokenAlive)
 - Опрашивает suno-api каждые 5 сек до готовности трека
 - Отправляет аудиофайл пользователю
+- Кнопки удаляются после выбора, blockquote стиль
 
 **Сервис 2 — suno-api** (`suno-api/`):
-- Прокси-обёртка над SUNO. Репозиторий: [gcui-art/suno-api](https://github.com/gcui-art/suno-api)
-- Авторизуется через cookie + passkey token
-- Эндпоинты: `POST /api/generate`, `GET /api/get?ids=`, `GET /api/get_limit`
+- Прокси-обёртка над SUNO. Форк: [papavini/suno-api](https://github.com/papavini/suno-api)
+- Авторизуется через cookie (passkey token НЕ нужен для Pro Plan!)
+- Эндпоинты: `POST /api/generate`, `POST /api/custom_generate`, `GET /api/get?ids=`, `GET /api/get_limit`
+
+**Сервис 3 — AI-генерация текстов** (планируется):
+- Модель: `google/gemini-3.1-flash-lite-preview` через OpenRouter API
+- Генерация текстов песен из пожеланий пользователя
+- STT: расшифровка голосовых сообщений в текст
 
 ---
 
@@ -43,15 +56,18 @@ Telegram-бот (@chingaresendbot / @podaritrackAi_bot), который ведё
 
 ```
 /start
-  └─► Приветствие + кнопка "Создать свою песню"
-        └─► Q1: Повод (8 кнопок + Свой вариант)
+  └─► Приветственное видео + blockquote текст + кнопка "Создать свою песню" (красная)
+        └─► Q1: Повод (8 кнопок + Свой вариант) — кнопки исчезают после выбора
               └─► Q2: Жанр (7 кнопок)
                     └─► Q3: Настроение (4 кнопки)
                           └─► Q4: Голос (Мужской / Женский)
                                 └─► Q5: Свободный текст (пожелания)
-                                      └─► Мотивационное сообщение
-                                            └─► Прогресс-бар ❤️🖤 (10%→55%→90%→100%)
-                                                  └─► 2 аудиофайла MP3
+                                      └─► Подтверждение (итог всех выборов)
+                                            └─► "Создать песню" (красная) / "Внести правки"
+                                                  └─► Pre-flight проверка токена
+                                                        └─► Мотивационное сообщение
+                                                              └─► Прогресс-бар ❤️🖤
+                                                                    └─► 2 аудиофайла MP3
 ```
 
 Ответы накапливаются в сессии через `setState` (merge-патч). После Q5 вызывается `buildPrompt`:
@@ -131,71 +147,35 @@ npm run start:tg
 
 ---
 
-## Запуск на Linux (продакшн)
+## Запуск на Linux (продакшн) — Docker
 
-### systemd-сервис для suno-api
-
-Создай файл `/etc/systemd/system/suno-api.service`:
-
-```ini
-[Unit]
-Description=SUNO API proxy
-After=network.target
-
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/home/ubuntu/suno-api
-ExecStart=/usr/bin/node_modules/.bin/next start
-# или просто: ExecStart=/usr/bin/npm start
-Restart=on-failure
-RestartSec=10
-EnvironmentFile=/home/ubuntu/suno-api/.env
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### systemd-сервис для бота
-
-Создай файл `/etc/systemd/system/podaritrack-bot.service`:
-
-```ini
-[Unit]
-Description=Podari Track Telegram Bot
-After=network.target suno-api.service
-
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/home/ubuntu/podaritrack-bot
-ExecStart=/usr/bin/node src/index.js --only=telegram
-Restart=on-failure
-RestartSec=5
-EnvironmentFile=/home/ubuntu/podaritrack-bot/.env
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Активация
+Деплой на мини ПК (192.168.0.128, Debian 13, Docker 29.4):
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable suno-api podaritrack-bot
-sudo systemctl start suno-api
-sleep 5
-sudo systemctl start podaritrack-bot
+ssh alexander@192.168.0.128
+cd ~/projects
+
+# Структура:
+# ~/projects/docker-compose.yml
+# ~/projects/moyapesnya/     — бот (papavini/moyapesnya)
+# ~/projects/suno-api/       — API (papavini/suno-api, ветка feature/passkey-automation)
+
+# Сборка и запуск
+docker compose build
+docker compose up -d
 
 # Проверка
-sudo systemctl status suno-api
-sudo systemctl status podaritrack-bot
-journalctl -u podaritrack-bot -f   # живые логи
+docker ps
+docker logs suno-bot --tail 20
+docker logs suno-api --tail 20
+curl http://localhost:3000/api/get_limit
+
+# Обновление бота после git push
+cd ~/projects/moyapesnya && git pull
+cd ~/projects && docker compose build bot && docker compose up -d --force-recreate bot
 ```
+
+> **Важно:** Docker bridge network не работает на этом сервере (HTTP заблокирован). Используется `network_mode: host` + `build.network: host`.
 
 ---
 
@@ -214,29 +194,11 @@ journalctl -u podaritrack-bot -f   # живые логи
 
 ---
 
-## Passkey token SUNO — как обновлять
+## Passkey token SUNO
 
-SUNO использует ротируемый `P1_eyJ...` токен (HS256 JWT от Cloudflare), который **протухает** через несколько часов/дней. Когда генерация возвращает 422 — нужен новый токен.
+> **Pro Plan аккаунты НЕ нуждаются в passkey токене!** SUNO веб-клиент отправляет `"token": null` для Pro Plan. Наш suno-api работает без токена.
 
-**Как получить:**
-
-1. Открой Chrome, зайди на `https://suno.com/create`
-2. Открой DevTools → Console
-3. Нажми кнопку Create (сгенерируй любую песню)
-4. В консоли появится строка: `captcha verified P1_eyJ...`
-5. Скопируй токен целиком (очень длинный)
-6. Вставь в `suno-api/.env`:
-   ```env
-   SUNO_PASSKEY_TOKEN=P1_eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
-   ```
-7. Пересобери и перезапусти suno-api:
-   ```bash
-   npm run build && npm start
-   # или через systemd:
-   sudo systemctl restart suno-api
-   ```
-
-> **Важно:** suno-api нужно **пересобирать** (`npm run build`) после изменения `.env`, потому что Next.js запекает переменные при сборке. Иначе `npm start` поднимет старый билд со старым токеном.
+Если что-то сломается — cookie (`SUNO_COOKIE`) нужно обновить вручную из браузера. `keepAlive()` в suno-api автоматически обновляет JWT сессию.
 
 ---
 
@@ -257,20 +219,24 @@ SUNO Бот Sales/
 ├── src/
 │   ├── index.js           # entrypoint: поднимает ботов, SIGINT/SIGTERM
 │   ├── config.js          # загрузка .env, дефолты
-│   ├── store.js           # in-memory сессии: state + data накапливаются через setState
+│   ├── store.js           # in-memory сессии: state + data через setState
+│   ├── assets/
+│   │   └── welcome.mp4    # приветственное видео (10MB, кешируется file_id)
 │   ├── suno/
-│   │   └── client.js      # HTTP-клиент к suno-api (generate, getClips, waitForClips, ping)
+│   │   └── client.js      # HTTP-клиент к suno-api + ensureTokenAlive()
 │   ├── flow/
-│   │   └── generate.js    # платформонезависимый флоу: submit → poll → return clips
+│   │   └── generate.js    # submit → pre-flight check → poll → return clips
 │   └── bots/
-│       ├── telegram.js    # grammY: 5-вопросный визард, прогресс-бар, replyWithAudio
-│       └── vk.js          # vk-io: аналогичный флоу (не тестировался в этой итерации)
+│       ├── telegram.js    # grammY: видео, blockquote, 5 вопросов, красные кнопки
+│       └── vk.js          # vk-io: аналогичный флоу
+├── emulator/
+│   ├── index.html         # веб-эмулятор бота для тестирования UI
+│   └── welcome.mp4        # копия видео для эмулятора
+├── Dockerfile             # Docker-образ для бота
 ├── .env                   # секреты (в git не включать!)
 ├── .env.example           # шаблон
 ├── .gitignore
-├── package.json
-├── start.bat              # запуск на Windows
-└── start.ps1              # запуск на Windows через PowerShell
+└── package.json
 ```
 
 ---
@@ -285,8 +251,9 @@ idle
               └─► awaiting_mood       (Q3: настроение)
                     └─► awaiting_voice (Q4: голос)
                           └─► awaiting_wishes  (Q5: свободный текст)
-                                └─► generating  (ждём SUNO)
-                                      └─► idle  (сброс после результата)
+                                └─► confirm  (подтверждение с итогом)
+                                      └─► generating  (pre-flight + SUNO)
+                                            └─► idle  (сброс после результата)
 ```
 
 `setState(platform, userId, state, patch)` делает merge `data = {...data, ...patch}`, поэтому ответы Q1–Q4 накапливаются и все доступны на шаге Q5.

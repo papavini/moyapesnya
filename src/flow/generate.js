@@ -29,11 +29,11 @@ export async function runGeneration(opts) {
   if (!alive) {
     return {
       ok: false,
-      error: 'Сессия SUNO истекла. Попробуйте через минуту или обратитесь к администратору.',
+      error: 'Сервер временно недоступен. Попробуйте через минуту.',
     };
   }
 
-  await status('Отправляю задание в SUNO…');
+  await status('Отправляю задание в студию…');
 
   let initial;
   try {
@@ -52,17 +52,17 @@ export async function runGeneration(opts) {
   } catch (e) {
     return {
       ok: false,
-      error: `Не смог поставить задачу в SUNO: ${e.message}`,
+      error: 'Ошибка при отправке в студию. Попробуйте ещё раз.',
       cause: e,
     };
   }
 
   if (!initial.length) {
-    return { ok: false, error: 'SUNO не вернул ни одного клипа на старте.' };
+    return { ok: false, error: 'Студия не приняла задание. Попробуйте ещё раз.' };
   }
 
   const ids = initial.map((c) => c.id).filter(Boolean);
-  await status(`SUNO принял задание (${ids.length} клип${ids.length === 1 ? '' : 'а'}). Жду готовности…`);
+  await status(`Студия приняла задание. Ожидаем готовности…`);
 
   let lastStatuses = '';
   const { clips, done, failed, timedOut } = await waitForClips(ids, {
@@ -79,8 +79,8 @@ export async function runGeneration(opts) {
     return {
       ok: false,
       error: timedOut
-        ? 'SUNO не успел сгенерировать трек за отведённое время.'
-        : 'SUNO вернул ошибку по всем клипам.',
+        ? 'Студия не успела сгенерировать трек за отведённое время. Попробуйте ещё раз.'
+        : 'Произошла ошибка при создании песни. Попробуйте ещё раз.',
       clips,
       failed,
     };

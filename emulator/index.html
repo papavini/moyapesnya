@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Telegram Bot Emulator — Подари Трек</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:#0e1621; color:#fff; height:100vh; display:flex; justify-content:center; align-items:center; }
+
+.phone { width:420px; height:90vh; max-height:900px; background:#0e1621; border-radius:24px; border:2px solid #2b3544; display:flex; flex-direction:column; overflow:hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+
+.header { background:#17212b; padding:12px 16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid #2b3544; }
+.header .avatar { width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#e74c3c,#9b59b6); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+.header .info { flex:1; }
+.header .name { font-size:15px; font-weight:600; }
+.header .status { font-size:12px; color:#6d7f8f; }
+.header .reset { background:none; border:none; color:#6d7f8f; font-size:20px; cursor:pointer; padding:4px 8px; }
+.header .reset:hover { color:#fff; }
+
+.chat { flex:1; overflow-y:auto; overflow-x:hidden; padding:12px 16px; display:flex; flex-direction:column; gap:8px; scroll-behavior:smooth; min-height:0; }
+
+.msg { max-width:85%; padding:8px 12px; border-radius:12px; font-size:14px; line-height:1.5; word-wrap:break-word; animation: fadeIn 0.2s ease; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+.msg.bot { background:#182533; align-self:flex-start; border-bottom-left-radius:4px; }
+.msg.user { background:#2b5278; align-self:flex-end; border-bottom-right-radius:4px; }
+
+.msg b, .msg strong { font-weight:600; }
+.msg i, .msg em { font-style:italic; color:#8e9baa; }
+
+.buttons { display:flex; flex-direction:column; gap:4px; margin-top:6px; }
+.btn-row { display:flex; gap:4px; }
+.btn-row button { flex:1; padding:8px 6px; border:none; border-radius:8px; font-size:13px; cursor:pointer; font-family:inherit; transition: all 0.15s; }
+.btn-row button.default { background:#2b5278; color:#fff; }
+.btn-row button.default:hover { background:#3a6a9b; }
+.btn-row button.danger { background:#c0392b; color:#fff; font-weight:600; }
+.btn-row button.danger:hover { background:#e74c3c; }
+
+.input-area { background:#17212b; padding:10px 12px; display:flex; gap:8px; border-top:1px solid #2b3544; }
+.input-area input { flex:1; background:#242f3d; border:none; border-radius:20px; padding:10px 16px; color:#fff; font-size:14px; outline:none; font-family:inherit; }
+.input-area input::placeholder { color:#6d7f8f; }
+.input-area button { background:#2b5278; border:none; border-radius:50%; width:40px; height:40px; color:#fff; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.input-area button:hover { background:#3a6a9b; }
+.input-area.disabled input { opacity:0.5; pointer-events:none; }
+
+.typing { color:#6d7f8f; font-size:12px; padding:4px 0; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
+.progress-bar { background:#1a2634; border-radius:8px; padding:10px 12px; margin-top:4px; }
+.hearts { font-size:16px; letter-spacing:2px; }
+
+.audio-msg { background:#182533; border-radius:12px; padding:12px; margin-top:4px; }
+.audio-msg .title { font-size:14px; margin-bottom:6px; }
+.audio-msg .wave { height:30px; background:linear-gradient(90deg, #2b5278 0%, #3498db 50%, #2b5278 100%); border-radius:4px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; }
+
+.video-msg { border-radius:12px; overflow:hidden; max-width:90%; align-self:flex-start; }
+.video-msg video { width:100%; max-height:180px; object-fit:cover; border-radius:12px 12px 0 0; display:block; }
+.video-msg .caption { background:#182533; padding:8px 12px; font-size:13px; line-height:1.4; max-height:200px; overflow-y:auto; }
+.video-msg .caption b { font-weight:600; }
+.video-msg .caption i { font-style:italic; color:#8e9baa; }
+.video-msg .buttons { padding:4px 8px 8px; background:#182533; border-radius:0 0 12px 12px; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="header">
+    <div class="avatar">🎤</div>
+    <div class="info">
+      <div class="name">Подари Трек</div>
+      <div class="status">бот</div>
+    </div>
+    <button class="reset" onclick="resetChat()" title="Сбросить">↻</button>
+  </div>
+  <div class="chat" id="chat"></div>
+  <div class="input-area" id="inputArea">
+    <input type="text" id="userInput" placeholder="Сообщение..." onkeydown="if(event.key==='Enter')sendMessage()">
+    <button onclick="sendMessage()">➤</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+// BOT CONFIG — EDIT THIS SECTION TO CHANGE BOT BEHAVIOR
+// ═══════════════════════════════════════════════════
+
+const WELCOME =
+  '🏛 Добро пожаловать в <b>сервис №1</b> по созданию персональных песен на заказ — <b>Подари Трек</b>\n\n' +
+  '🎤 Создайте песню за 5 минут по любой вашей истории, которая станет незабываемым <b>ВАУ-подарком</b> для вас и ваших близких❤️\n\n' +
+  '🎬 А также под песни мы делаем волшебные анимированные <b>видео-мультфильмы из ваших фотографий</b>✨\n\n' +
+  '❌ Вам не нужно петь\n' +
+  '❌ Не нужно придумывать слова\n\n' +
+  '✅ Ответьте на 5 простых вопросов и получите уникальный текст к вашей песне совершенно бесплатно уже через 3 минуты!\n\n' +
+  '📝 Если понравится текст — вы сразу сможете <b>превратить его в настоящую песню!</b>\n\n' +
+  '😁 За 11 лет работы мы подарили более 500.000+ клиентам самые незабываемые эмоции с помощью песен! Удивим и вас🔥\n\n' +
+  '— Ну что? Начнем? 🥹';
+
+const WISHES_PROMPT =
+  '🎤 <b>Последний шаг к созданию вашей песни!</b>\n\n' +
+  'Напишите всего несколько фактов о получателе❤️\n\n' +
+  '✏️ Имя получателя песни и кем он вам приходится\n' +
+  '🥰 Какие эмоции хотите передать (любовь, благодарность, юмор и т.д.)\n' +
+  '🤔 То, что знаете только вы: забавные случаи, любимые фразы\n' +
+  '🌟 Что делает его особенным: привычки, за что вы его любите, как по-своему называете\n\n' +
+  '⚠️ <i>Самое главное: Не усложняйте! Хватит несколько простых фактов!</i>\n\n' +
+  '📝 Напишите текстом, или надиктуйте голосом 🎙 свои пожелания к песне в ответ на это сообщение☝️';
+
+const EXAMPLES_TEXT =
+  'Пример 1.\n\n' +
+  '🥰 <b>Мужу Диме на день рождения</b>\n\n' +
+  'Вместе 21 год. Знакомы со школы, Дима покорил меня песней на гитаре) Зову его "радость моя", а он меня "кОтя". Сын Даня и дочка Анжелика.\n\n' +
+  'Пример 2.\n\n' +
+  '🤲 <b>Для жены Ольги на юбилей</b>\n\n' +
+  'Познакомились с Оленькой на работе, она повар. Первое свидание в кино, в 2013 поженились.\n\n' +
+  '📝 <i>Напишите текстом свои пожелания к песне в ответ на это сообщение☝️</i>';
+
+const Q1_BUTTONS = [
+  [{ text: '🎂 День рождения', data: 'q1:День рождения' }, { text: '🎵 Без повода', data: 'q1:Без повода' }],
+  [{ text: '🎈 Юбилей', data: 'q1:Юбилей' }, { text: '📅 Дата отношений', data: 'q1:Дата отношений' }],
+  [{ text: '💍 Свадьба', data: 'q1:Свадьба' }, { text: '💑 Годовщина', data: 'q1:Годовщина' }],
+  [{ text: '✈️ На расстоянии', data: 'q1:На расстоянии' }, { text: '😂 Розыгрыш', data: 'q1:Розыгрыш' }],
+  [{ text: '🙏 Попросить прощения', data: 'q1:Попросить прощения' }],
+  [{ text: '✏️ Свой вариант', data: 'q1:custom' }],
+];
+
+const Q2_BUTTONS = [
+  [{ text: '🎙 Поп-музыка', data: 'q2:поп-музыка' }, { text: '🤘 Рок', data: 'q2:рок' }],
+  [{ text: '🎤 Рэп / Хип-хоп', data: 'q2:рэп, хип-хоп' }, { text: '🥃 Шансон', data: 'q2:шансон' }],
+  [{ text: '🏰 В стиле Disney', data: 'q2:Disney, сказочный' }, { text: '🎸 Под гитару', data: 'q2:акустика, гитара' }],
+  [{ text: '💃 Танцевальная музыка', data: 'q2:танцевальный, электронный' }],
+];
+
+const Q3_BUTTONS = [
+  [{ text: '🥹 Сентиментальное, лиричное', data: 'q3:сентиментальное, лиричное' }],
+  [{ text: '🥰 Радостное, позитивное', data: 'q3:радостное, позитивное' }],
+  [{ text: '😘 Романтичное', data: 'q3:романтичное' }],
+  [{ text: '🧞 На наше усмотрение', data: 'q3:любое' }],
+];
+
+const Q4_BUTTONS = [
+  [{ text: '🎙 Мужским', data: 'q4:мужской вокал' }, { text: '🎤 Женским', data: 'q4:женский вокал' }],
+];
+
+// ═══════════════════════════════════════════════════
+// ENGINE — handles state, rendering, flow
+// ═══════════════════════════════════════════════════
+
+let state = 'idle';
+let data = {};
+const chat = document.getElementById('chat');
+
+function resetChat() {
+  chat.innerHTML = '';
+  state = 'idle';
+  data = {};
+  enableInput();
+  handleStart();
+}
+
+function addMsg(html, type = 'bot', buttons = null) {
+  const div = document.createElement('div');
+  div.className = `msg ${type}`;
+  div.innerHTML = html.replace(/\n/g, '<br>');
+  if (buttons) {
+    const bDiv = document.createElement('div');
+    bDiv.className = 'buttons';
+    for (const row of buttons) {
+      const rDiv = document.createElement('div');
+      rDiv.className = 'btn-row';
+      for (const btn of row) {
+        const b = document.createElement('button');
+        b.textContent = btn.text;
+        b.className = btn.style === 'danger' ? 'danger' : 'default';
+        b.onclick = () => handleCallback(btn.data);
+        rDiv.appendChild(b);
+      }
+      bDiv.appendChild(rDiv);
+    }
+    div.appendChild(bDiv);
+  }
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+function addUserMsg(text) {
+  addMsg(text, 'user');
+}
+
+function disableInput() {
+  document.getElementById('inputArea').classList.add('disabled');
+}
+function enableInput() {
+  document.getElementById('inputArea').classList.remove('disabled');
+  document.getElementById('userInput').focus();
+}
+
+function heartProgress(pct) {
+  const total = 7;
+  const filled = Math.round((pct / 100) * total);
+  return '❤️'.repeat(filled) + '🖤'.repeat(total - filled) + ` ${pct}%`;
+}
+
+// ═══════════════════════════════════════════════════
+// FLOW
+// ═══════════════════════════════════════════════════
+
+function handleStart() {
+  // Video + welcome message
+  const wrapper = document.createElement('div');
+  wrapper.className = 'video-msg';
+  wrapper.style.animation = 'fadeIn 0.2s ease';
+
+  const video = document.createElement('video');
+  video.src = 'welcome.mp4';
+  video.controls = true;
+  video.autoplay = true;
+  video.muted = true;
+  video.playsInline = true;
+  wrapper.appendChild(video);
+
+  const caption = document.createElement('div');
+  caption.className = 'caption';
+  caption.innerHTML = WELCOME.replace(/\n/g, '<br>');
+  wrapper.appendChild(caption);
+
+  const bDiv = document.createElement('div');
+  bDiv.className = 'buttons';
+  bDiv.style.background = '#182533';
+  const rDiv = document.createElement('div');
+  rDiv.className = 'btn-row';
+  const b = document.createElement('button');
+  b.textContent = '🎤 Создать свою песню';
+  b.className = 'danger';
+  b.onclick = () => handleCallback('create');
+  rDiv.appendChild(b);
+  bDiv.appendChild(rDiv);
+  wrapper.appendChild(bDiv);
+
+  chat.appendChild(wrapper);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function handleCallback(cb) {
+  if (cb === 'create') {
+    state = 'awaiting_occasion';
+    addMsg('Вопрос 1/5. На какое событие вы хотите подарить песню?\n\n<i>Можете выбрать из списка, или написать свой вариант☝️</i>', 'bot', Q1_BUTTONS);
+  }
+  else if (cb.startsWith('q1:')) {
+    const val = cb.slice(3);
+    if (val === 'custom') {
+      state = 'awaiting_occasion_custom';
+      addMsg('✏️ Напишите свой вариант события:');
+      enableInput();
+      return;
+    }
+    data.occasion = val;
+    state = 'awaiting_genre';
+    addMsg('Вопрос 2/5. Выберите жанр для вашей песни☝️', 'bot', Q2_BUTTONS);
+  }
+  else if (cb.startsWith('q2:')) {
+    data.genre = cb.slice(3);
+    state = 'awaiting_mood';
+    addMsg('Вопрос 3/5. Отлично! Теперь выберите настроение для вашей песни☝️', 'bot', Q3_BUTTONS);
+  }
+  else if (cb.startsWith('q3:')) {
+    data.mood = cb.slice(3);
+    state = 'awaiting_voice';
+    addMsg('Вопрос 4/5. Каким голосом будем исполнять вашу песню☝️', 'bot', Q4_BUTTONS);
+  }
+  else if (cb.startsWith('q4:')) {
+    data.voice = cb.slice(3);
+    state = 'awaiting_wishes';
+    addMsg(WISHES_PROMPT, 'bot', [
+      [{ text: '📋 Показать пример пожеланий', data: 'show_examples' }]
+    ]);
+    enableInput();
+  }
+  else if (cb === 'show_examples') {
+    addMsg(EXAMPLES_TEXT);
+  }
+  else if (cb === 'confirm_create') {
+    simulateGeneration();
+  }
+  else if (cb === 'edit_wishes') {
+    state = 'awaiting_wishes';
+    addMsg('✏️ Напишите новые пожелания к песне:');
+    enableInput();
+  }
+}
+
+function sendMessage() {
+  const input = document.getElementById('userInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  if (text === '/start') { resetChat(); return; }
+
+  addUserMsg(text);
+
+  if (state === 'awaiting_occasion_custom') {
+    data.occasion = text;
+    state = 'awaiting_genre';
+    addMsg('Вопрос 2/5. Выберите жанр для вашей песни☝️', 'bot', Q2_BUTTONS);
+  }
+  else if (state === 'awaiting_wishes') {
+    data.wishes = text;
+    state = 'confirm';
+    const short = text.length > 150 ? text.substring(0, 150) + '...' : text;
+    addMsg(
+      '✅ <b>Отлично! Вот что получилось:</b>\n\n' +
+      `🎉 Повод: ${data.occasion}\n` +
+      `🎵 Жанр: ${data.genre}\n` +
+      `🎭 Настроение: ${data.mood}\n` +
+      `🎤 Голос: ${data.voice}\n` +
+      `📝 Пожелания: ${short}\n\n` +
+      'Просто нажмите на кнопку 👇',
+      'bot',
+      [
+        [{ text: '🔥 Создать песню с данным текстом', data: 'confirm_create', style: 'danger' }],
+        [{ text: '✏️ Внести правки', data: 'edit_wishes' }],
+      ]
+    );
+  }
+  else if (state === 'generating') {
+    addMsg('🎧 Уже создаю вашу песню, подождите немного…');
+  }
+  else {
+    addMsg('Нажмите /start чтобы начать 🎵');
+  }
+}
+
+async function simulateGeneration() {
+  state = 'generating';
+  disableInput();
+
+  addMsg(
+    '🥺 Не каждый подарок умеет говорить "я рядом"…\n\n' +
+    'Но <b>песня</b> — умеет. Наши клиенты говорят, что она передаёт всё то, что сложно сказать в обычном разговоре: благодарность, поддержку, общие воспоминания.\n\n' +
+    '🎵 Создаём вашу персональную песню!'
+  );
+
+  const progressDiv = addMsg('Проверяю готовность студии…\n' + heartProgress(5));
+  await sleep(1000);
+
+  progressDiv.innerHTML = 'Начали сочинять вашу песню<br>' + heartProgress(20);
+  await sleep(2000);
+
+  progressDiv.innerHTML = 'Превращаем вашу историю в хит<br>' + heartProgress(55);
+  await sleep(2000);
+
+  progressDiv.innerHTML = 'Финальные штрихи<br>' + heartProgress(90);
+  await sleep(1500);
+
+  progressDiv.innerHTML = '🎉 Ваша песня готова!<br>' + heartProgress(100);
+
+  const audioDiv = document.createElement('div');
+  audioDiv.className = 'msg bot';
+  audioDiv.innerHTML =
+    '<div class="audio-msg">' +
+    '<div class="title">🎵 Ваша персональная песня!</div>' +
+    '<div class="wave">▶ 0:00 / 3:24</div>' +
+    '</div><br>Хотите ещё одну? /start';
+  chat.appendChild(audioDiv);
+  chat.scrollTop = chat.scrollHeight;
+
+  state = 'idle';
+  data = {};
+  enableInput();
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Start
+handleStart();
+document.getElementById('userInput').focus();
+</script>
+</body>
+</html>

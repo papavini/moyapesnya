@@ -24,6 +24,11 @@ export const config = {
     pollIntervalSec: num(process.env.SUNO_POLL_INTERVAL_SEC, 5),
     sendFirstOnly: bool(process.env.SUNO_SEND_FIRST_ONLY, false),
   },
+  ai: {
+    apiKey: process.env.OPENROUTER_API_KEY || '',
+    model: process.env.AI_MODEL || 'google/gemini-3.1-flash-lite-preview',
+    baseUrl: process.env.AI_BASE_URL || 'https://openrouter.ai/api/v1',
+  },
   paywallEnabled: bool(process.env.PAYWALL_ENABLED, false),
 };
 

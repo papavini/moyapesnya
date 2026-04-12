@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "emulator",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "emulator", "-l", "5555", "--no-clipboard"],
+      "port": 5555
+    }
+  ]
+}

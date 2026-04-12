@@ -1,43 +1,54 @@
-import { Bot, InlineKeyboard } from 'grammy';
+import { Bot, InlineKeyboard, InputFile } from 'grammy';
 import { config, assertBotConfig } from '../config.js';
 import { getSession, setState, resetSession } from '../store.js';
 import { runGeneration } from '../flow/generate.js';
 import { pingSuno, getCreditsLeft } from '../suno/client.js';
+import { generateLyrics } from '../ai/client.js';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+
+import { readFileSync, writeFileSync } from 'fs';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const WELCOME_VIDEO_PATH = resolve(__dirname, '..', 'assets', 'welcome.mp4');
+const FILE_ID_CACHE = resolve(__dirname, '..', 'assets', '.video_file_id');
+let welcomeVideoFileId = null;
+try { welcomeVideoFileId = readFileSync(FILE_ID_CACHE, 'utf8').trim() || null; } catch {}
 
 const PLATFORM = 'tg';
 
 const WELCOME =
-  '🏛 Добро пожаловать в *сервис №1* по созданию персональных песен на заказ — *Подари Трек*\n\n' +
-  '🎤 Создайте песню за 5 минут по любой вашей истории, которая станет незабываемым *ВАУ-подарком* для вас и ваших близких❤️\n\n' +
-  '🎬 А также под песни мы делаем волшебные анимированные *видео-мультфильмы из ваших фотографий*✨\n\n' +
+  '<blockquote>🏛 Добро пожаловать в <b>сервис №1</b> по созданию персональных песен на заказ — <b>Подари Песню!</b>\n\n' +
+  '🎤 Создайте песню за 5 минут по любой вашей истории, которая станет незабываемым <b>ВАУ-подарком</b> для вас и ваших близких❤️\n\n' +
+  '🎬 А также под песни мы делаем волшебные анимированные <b>видео-мультфильмы из ваших фотографий</b>✨\n\n' +
   '❌ Вам не нужно петь\n' +
   '❌ Не нужно придумывать слова\n\n' +
   '✅ Ответьте на 5 простых вопросов и получите уникальный текст к вашей песне совершенно бесплатно уже через 3 минуты!\n\n' +
-  '📝 Если понравится текст — вы сразу сможете *превратить его в настоящую песню!*\n\n' +
+  '📝 Если понравится текст — вы сразу сможете <b>превратить его в настоящую песню!</b>\n\n' +
   '😁 За 11 лет работы мы подарили более 500.000+ клиентам самые незабываемые эмоции с помощью песен! Удивим и вас🔥\n\n' +
-  '— Ну что? Начнем? 🥹';
+  '— Ну что? Начнем? 🥹</blockquote>';
 
 const WISHES_PROMPT =
-  '🎤 *Последний шаг к созданию вашей песни!*\n\n' +
+  '<blockquote>🎤 <b>Последний шаг к созданию вашей песни!</b>\n\n' +
   'Напишите всего несколько фактов о получателе❤️\n\n' +
   '✏️ Имя получателя песни и кем он вам приходится\n' +
   '🥰 Какие эмоции хотите передать (любовь, благодарность, юмор и т.д.)\n' +
   '🤔 То, что знаете только вы: забавные случаи, любимые фразы\n' +
   '🌟 Что делает его особенным: привычки, за что вы его любите, как по-своему называете\n\n' +
-  '⚠️ _Самое главное: Не усложняйте! Хватит несколько простых фактов!_\n\n' +
-  '📝 Напишите текстом, или надиктуйте голосом 🎙 свои пожелания к песне в ответ на это сообщение☝️';
+  '⚠️ <i>Самое главное: Не усложняйте! Хватит несколько простых фактов!</i>\n\n' +
+  '📝 Напишите текстом, или надиктуйте голосом 🎙 свои пожелания к песне в ответ на это сообщение☝️</blockquote>';
 
 const EXAMPLES_TEXT =
   'Пример 1.\n\n' +
-  '🥰 *Мужу Диме на день рождения*\n\n' +
+  '🥰 <b>Мужу Диме на день рождения</b>\n\n' +
   'Вместе 21 год. Знакомы со школы, Дима покорил меня песней на гитаре) Зову его "радость моя", а он меня "кОтя". Сын Даня и дочка Анжелика. Даня поступил в университет в Питере. Анжелика обожает ездить на рыбалку с папой. Мы его очень сильно любим!\n\n' +
   'Пример 2.\n\n' +
-  '🤲 *Для жены Ольги на юбилей*\n\n' +
+  '🤲 <b>Для жены Ольги на юбилей</b>\n\n' +
   'Познакомились с Оленькой на работе, она повар. Первое свидание в кино, в 2013 поженились. В 2015 родилась дочь Алёна, наша звёздочка! Оля обожает цветы и кота рыжика. Люблю их с дочкой и буду всегда для них опорой.\n\n' +
   'Пример 3.\n\n' +
-  '💃 *Для подруги Лизы*\n\n' +
+  '💃 <b>Для подруги Лизы</b>\n\n' +
   'Она светит как солнце! Обожает своего кота Васю и кофе с корицей. Любимая фраза «Сама решу»)) Хочу, чтобы песня была тёплой, как наши вечерние разговоры. Повод — её день рождения 🎂\n\n' +
-  '📝 _Напишите текстом свои пожелания к песне в ответ на это сообщение☝️_';
+  '📝 <i>Напишите текстом, или надиктуйте голосом 🎙 свои пожелания к песне в ответ на это сообщение☝️</i>';
 
 function q1Keyboard() {
   return new InlineKeyboard()
@@ -85,8 +96,8 @@ function q3Keyboard() {
 
 function q4Keyboard() {
   return new InlineKeyboard()
-    .text('🎙 Мужским', 'q4:мужской вокал')
-    .text('🎤 Женским', 'q4:женский вокал');
+    .text('🎙 Мужским', 'q4:мужской вокал').danger()
+    .text('🎤 Женским', 'q4:женский вокал').success();
 }
 
 function wishesKeyboard() {
@@ -105,6 +116,10 @@ function buildPrompt({ occasion, genre, mood, voice, wishes }) {
   );
 }
 
+function escapeHtml(text) {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function heartProgress(percent) {
   const total = 7;
   const filled = Math.round((percent / 100) * total);
@@ -118,30 +133,47 @@ export function createTelegramBot() {
   // /start
   bot.command('start', async (ctx) => {
     resetSession(PLATFORM, ctx.from.id);
-    await ctx.reply(WELCOME, {
-      parse_mode: 'Markdown',
-      reply_markup: new InlineKeyboard().text('🎤 Создать свою песню', 'create').danger(),
-    });
+    try {
+      const video = welcomeVideoFileId || new InputFile(WELCOME_VIDEO_PATH);
+      const sent = await ctx.replyWithVideo(video, {
+        caption: WELCOME,
+        parse_mode: 'HTML',
+        reply_markup: new InlineKeyboard().text('🎤 Создать свою песню', 'create').danger(),
+      });
+      if (!welcomeVideoFileId && sent.video) {
+        welcomeVideoFileId = sent.video.file_id;
+        try { writeFileSync(FILE_ID_CACHE, welcomeVideoFileId); } catch {}
+        console.log('[telegram] видео закешировано:', welcomeVideoFileId.substring(0, 30) + '...');
+      }
+    } catch (e) {
+      console.error('[telegram] видео не отправилось:', e.message);
+      await ctx.reply(WELCOME, {
+        parse_mode: 'HTML',
+        reply_markup: new InlineKeyboard().text('🎤 Создать свою песню', 'create').danger(),
+      });
+    }
   });
 
   // Кнопка "Создать свою песню" → Вопрос 1/5
   bot.callbackQuery('create', async (ctx) => {
     await ctx.answerCallbackQuery();
+    try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch {}
     setState(PLATFORM, ctx.from.id, 'awaiting_occasion');
     await ctx.reply(
       'Вопрос 1/5. На какое событие вы хотите подарить песню?\n\n' +
-        '_Можете выбрать из списка, или написать свой вариант☝️_',
-      { parse_mode: 'Markdown', reply_markup: q1Keyboard() },
+        '<i>Можете выбрать из списка, или написать свой вариант☝️</i>',
+      { parse_mode: 'HTML', reply_markup: q1Keyboard() },
     );
   });
 
   // Вопрос 1 — событие
   bot.callbackQuery(/^q1:(.+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
+    try { await ctx.deleteMessage(); } catch {}
     const val = ctx.match[1];
     if (val === 'custom') {
       setState(PLATFORM, ctx.from.id, 'awaiting_occasion_custom');
-      await ctx.reply('✏️ Напишите свой вариант события:');
+      await ctx.reply('✏️ Напишите свой вариант события, или надиктуйте голосом 🎙');
       return;
     }
     setState(PLATFORM, ctx.from.id, 'awaiting_genre', { occasion: val });
@@ -153,6 +185,7 @@ export function createTelegramBot() {
   // Вопрос 2 — жанр
   bot.callbackQuery(/^q2:(.+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
+    try { await ctx.deleteMessage(); } catch {}
     setState(PLATFORM, ctx.from.id, 'awaiting_mood', { genre: ctx.match[1] });
     await ctx.reply(
       'Вопрос 3/5. Отлично! Теперь выберите настроение для вашей песни☝️',
@@ -163,6 +196,7 @@ export function createTelegramBot() {
   // Вопрос 3 — настроение
   bot.callbackQuery(/^q3:(.+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
+    try { await ctx.deleteMessage(); } catch {}
     setState(PLATFORM, ctx.from.id, 'awaiting_voice', { mood: ctx.match[1] });
     await ctx.reply('Вопрос 4/5. Каким голосом будем исполнять вашу песню☝️', {
       reply_markup: q4Keyboard(),
@@ -172,36 +206,129 @@ export function createTelegramBot() {
   // Вопрос 4 — голос
   bot.callbackQuery(/^q4:(.+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
+    try { await ctx.deleteMessage(); } catch {}
     setState(PLATFORM, ctx.from.id, 'awaiting_wishes', { voice: ctx.match[1] });
     await ctx.reply(WISHES_PROMPT, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       reply_markup: wishesKeyboard(),
     });
   });
 
-  // Подтверждение → генерация
+  // Подтверждение → AI генерирует текст → показывает с кнопками
   bot.callbackQuery('confirm_create', async (ctx) => {
     await ctx.answerCallbackQuery();
+    try { await ctx.deleteMessage(); } catch {}
     const session = getSession(PLATFORM, ctx.from.id);
     const { occasion, genre, mood, voice, wishes } = session.data;
-    setState(PLATFORM, ctx.from.id, 'generating');
-    await handleGenerate(ctx, {
-      mode: 'description',
-      prompt: buildPrompt({ occasion, genre, mood, voice, wishes }),
+
+    const lyricsMsg = await ctx.reply('✍️ Сочиняю текст вашей песни…');
+    let aiResult;
+    try {
+      aiResult = await generateLyrics({ occasion, genre, mood, voice, wishes });
+    } catch (e) {
+      console.error('[telegram] AI ошибка:', e.message);
+      await ctx.api.editMessageText(lyricsMsg.chat.id, lyricsMsg.message_id,
+        '⚠️ Генератор текста временно недоступен, создаём по описанию…');
+      setState(PLATFORM, ctx.from.id, 'generating');
+      await handleGenerate(ctx, {
+        mode: 'description',
+        prompt: buildPrompt({ occasion, genre, mood, voice, wishes }),
+      });
+      return;
+    }
+
+    // Сохраняем текст в сессию
+    setState(PLATFORM, ctx.from.id, 'review_lyrics', {
+      lyrics: aiResult.lyrics,
+      tags: aiResult.tags,
+      title: aiResult.title,
     });
+
+    // Показываем текст + мотивация + кнопки
+    try { await ctx.api.deleteMessage(lyricsMsg.chat.id, lyricsMsg.message_id); } catch {}
+
+    await ctx.reply(
+      `📝 <b>Текст вашей песни:</b>\n\n${escapeHtml(aiResult.lyrics)}\n\n` +
+      `Как вам?🤩\n\n` +
+      `💎 Этот уникальный текст только ваш! И помните: какой бы он не был прекрасный - <u>это только 20%</u> от того чуда, что вас ждёт!\n\n` +
+      `🔥 <b>Всю магию творит музыка!</b> Возьмите любой мировой хит и без музыки прочтите только текст - это будут самые обычные стихи 🤷\n\n` +
+      `<i>Если нужно - вы можете внести свои коррективы, или добавить какие-то конкретные детали 🤗</i>`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: new InlineKeyboard()
+          .text('🔥 Создать песню с данным текстом', 'create_song').danger()
+          .row()
+          .text('📝 Изменить текст', 'edit_lyrics'),
+      },
+    );
   });
 
-  // Правки → назад к пожеланиям
+  // Создать песню из готового текста
+  bot.callbackQuery('create_song', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    try { await ctx.deleteMessage(); } catch {}
+    const session = getSession(PLATFORM, ctx.from.id);
+    if (!session.data?.lyrics) {
+      await ctx.reply('Сессия устарела. Нажмите /start чтобы начать заново 🎵');
+      return;
+    }
+    const { lyrics, tags, title } = session.data;
+    setState(PLATFORM, ctx.from.id, 'generating');
+    await handleGenerate(ctx, { mode: 'custom', lyrics, tags, title });
+  });
+
+  // Изменить текст
+  bot.callbackQuery('edit_lyrics', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    try { await ctx.deleteMessage(); } catch {}
+    setState(PLATFORM, ctx.from.id, 'editing_lyrics');
+    await ctx.reply(
+      '🤔 <b>Что вы хотели бы поменять?</b>\n\n' +
+      'Нашли ошибку? Не нравится какое-то слово в припеве? Или нужно заменить строчку в куплете?\n\n' +
+      '📝 Напишите текстом, или надиктуйте голосом 🎙 что конкретно нужно изменить, и мы учтём ваши пожелания! 👇',
+      {
+        parse_mode: 'HTML',
+        reply_markup: new InlineKeyboard().text('⬅️ Назад к тексту песни', 'back_to_lyrics'),
+      },
+    );
+  });
+
+  // Назад к тексту
+  bot.callbackQuery('back_to_lyrics', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    try { await ctx.deleteMessage(); } catch {}
+    const session = getSession(PLATFORM, ctx.from.id);
+    if (!session.data?.lyrics) {
+      await ctx.reply('Сессия устарела. Нажмите /start чтобы начать заново 🎵');
+      return;
+    }
+    const { lyrics } = session.data;
+    setState(PLATFORM, ctx.from.id, 'review_lyrics');
+    await ctx.reply(
+      `📝 <b>Текст вашей песни:</b>\n\n${escapeHtml(lyrics)}\n\n` +
+      `<i>Если нужно - вы можете внести свои коррективы 🤗</i>`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: new InlineKeyboard()
+          .text('🔥 Создать песню с данным текстом', 'create_song').danger()
+          .row()
+          .text('📝 Изменить текст', 'edit_lyrics'),
+      },
+    );
+  });
+
+  // Правки пожеланий (из экрана подтверждения)
   bot.callbackQuery('edit_wishes', async (ctx) => {
     await ctx.answerCallbackQuery();
+    try { await ctx.deleteMessage(); } catch {}
     setState(PLATFORM, ctx.from.id, 'awaiting_wishes');
-    await ctx.reply('✏️ Напишите новые пожелания к песне:');
+    await ctx.reply('✏️ Напишите новые пожелания к песне, или надиктуйте голосом 🎙');
   });
 
   // Примеры пожеланий
   bot.callbackQuery('show_examples', async (ctx) => {
     await ctx.answerCallbackQuery();
-    await ctx.reply(EXAMPLES_TEXT, { parse_mode: 'Markdown' });
+    await ctx.reply(EXAMPLES_TEXT, { parse_mode: 'HTML' });
   });
 
   // Текстовые сообщения
@@ -225,21 +352,60 @@ export function createTelegramBot() {
       setState(PLATFORM, userId, 'confirm', { wishes: text });
       const { occasion, genre, mood, voice } = session.data;
       await ctx.reply(
-        '✅ *Отлично! Вот что получилось:*\n\n' +
+        '✅ <b>Отлично! Вот что получилось:</b>\n\n' +
           `🎉 Повод: ${occasion}\n` +
           `🎵 Жанр: ${genre}\n` +
           `🎭 Настроение: ${mood}\n` +
           `🎤 Голос: ${voice}\n` +
-          `📝 Пожелания: ${text.substring(0, 150)}${text.length > 150 ? '...' : ''}\n\n` +
+          `📝 Пожелания: ${escapeHtml(text.substring(0, 150))}${text.length > 150 ? '...' : ''}\n\n` +
           'Просто нажмите на кнопку 👇',
         {
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
           reply_markup: new InlineKeyboard()
-            .text('🔥 Создать песню с данным текстом', 'confirm_create').danger()
+            .text('🔥 Создать текст песни', 'confirm_create').danger()
             .row()
             .text('✏️ Внести правки', 'edit_wishes'),
         },
       );
+      return;
+    }
+
+    if (session.state === 'editing_lyrics') {
+      // Пользователь прислал правки → AI переделывает текст
+      const editMsg = await ctx.reply('✍️ Вношу правки…');
+      const { occasion, genre, mood, voice, wishes, lyrics: oldLyrics } = session.data;
+      try {
+        const aiResult = await generateLyrics({
+          occasion, genre, mood, voice,
+          wishes: wishes + '\n\nПРАВКИ К ТЕКСТУ: ' + text + '\n\nПредыдущий текст:\n' + oldLyrics,
+        });
+        setState(PLATFORM, userId, 'review_lyrics', {
+          lyrics: aiResult.lyrics,
+          tags: aiResult.tags,
+          title: aiResult.title,
+        });
+        try { await ctx.api.deleteMessage(editMsg.chat.id, editMsg.message_id); } catch {}
+        await ctx.reply(
+          `📝 <b>Обновлённый текст:</b>\n\n${escapeHtml(aiResult.lyrics)}\n\n` +
+          `<i>Если нужно - вы можете внести ещё коррективы 🤗</i>`,
+          {
+            parse_mode: 'HTML',
+            reply_markup: new InlineKeyboard()
+              .text('🔥 Создать песню с данным текстом', 'create_song').danger()
+              .row()
+              .text('📝 Изменить текст', 'edit_lyrics'),
+          },
+        );
+      } catch (e) {
+        console.error('[telegram] AI правки ошибка:', e.message);
+        try { await ctx.api.deleteMessage(editMsg.chat.id, editMsg.message_id); } catch {}
+        await ctx.reply('⚠️ Не удалось внести правки. Попробуйте ещё раз или нажмите "Создать песню".');
+      }
+      return;
+    }
+
+    if (session.state === 'review_lyrics') {
+      await ctx.reply('👆 Используйте кнопки выше — "Создать песню" или "Изменить текст"');
       return;
     }
 
@@ -249,6 +415,16 @@ export function createTelegramBot() {
     }
 
     await ctx.reply('Нажмите /start чтобы начать 🎵');
+  });
+
+  // Голосовые сообщения — пока заглушка, будет STT
+  bot.on('message:voice', async (ctx) => {
+    const session = getSession(PLATFORM, ctx.from.id);
+    if (['awaiting_wishes', 'awaiting_occasion_custom', 'editing_lyrics'].includes(session.state)) {
+      await ctx.reply('🎙 Голосовые сообщения скоро будут поддерживаться! Пока напишите текстом 📝');
+    } else {
+      await ctx.reply('Нажмите /start чтобы начать 🎵');
+    }
   });
 
   // /cancel
@@ -277,9 +453,9 @@ async function handleGenerate(ctx, opts) {
   // Мотивационное сообщение
   await ctx.reply(
     '🥺 Не каждый подарок умеет говорить "я рядом"…\n\n' +
-      'Но *песня* — умеет. Наши клиенты говорят, что она передаёт всё то, что сложно сказать в обычном разговоре: благодарность, поддержку, общие воспоминания.\n\n' +
+      'Но <b>песня</b> — умеет. Наши клиенты говорят, что она передаёт всё то, что сложно сказать в обычном разговоре: благодарность, поддержку, общие воспоминания.\n\n' +
       '🎵 Создаём вашу персональную песню!',
-    { parse_mode: 'Markdown' },
+    { parse_mode: 'HTML' },
   );
 
   // Сообщение прогресса (будем редактировать)
@@ -319,10 +495,10 @@ async function handleGenerate(ctx, opts) {
       await ctx.api.editMessageText(
         progressMsg.chat.id,
         progressMsg.message_id,
-        `😔 Не получилось создать песню: ${result.error}\n\nПопробуйте ещё раз — /start`,
+        '😔 Не получилось создать песню. Попробуйте ещё раз — /start',
       );
     } catch {
-      await ctx.reply(`😔 Не получилось: ${result.error}\n\nПопробуйте ещё раз — /start`);
+      await ctx.reply('😔 Не получилось создать песню. Попробуйте ещё раз — /start');
     }
     return;
   }

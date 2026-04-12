@@ -6,3 +6,5 @@ node_modules/
 .DS_Store
 dist/
 .vscode/
+*.mp4
+.video_file_id
