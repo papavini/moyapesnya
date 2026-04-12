@@ -191,13 +191,6 @@ export function createTelegramBot() {
     });
   });
 
-  // Правки → назад к пожеланиям
-  bot.callbackQuery('edit_wishes', async (ctx) => {
-    await ctx.answerCallbackQuery();
-    setState(PLATFORM, ctx.from.id, 'awaiting_wishes');
-    await ctx.reply('✏️ Напишите новые пожелания к песне:');
-  });
-
   // Примеры пожеланий
   bot.callbackQuery('show_examples', async (ctx) => {
     await ctx.answerCallbackQuery();
@@ -235,9 +228,7 @@ export function createTelegramBot() {
         {
           parse_mode: 'Markdown',
           reply_markup: new InlineKeyboard()
-            .text('🔥 Создать песню с данным текстом', 'confirm_create').danger()
-            .row()
-            .text('✏️ Внести правки', 'edit_wishes'),
+            .text('🔥 Создать песню с данным текстом', 'confirm_create').danger(),
         },
       );
       return;
