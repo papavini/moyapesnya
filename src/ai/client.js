@@ -35,24 +35,35 @@ export async function generateLyrics({ occasion, genre, mood, voice, wishes }) {
     `Голос: ${voice}\n` +
     `Пожелания и история от заказчика: ${wishes}`;
 
-  const res = await fetch(`${config.ai.baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${config.ai.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: config.ai.model,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
-      ],
-      max_tokens: 2000,
-      temperature: 0.9,
-    }),
-  });
+  let text, res;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      res = await fetch(`${config.ai.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.ai.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: config.ai.model,
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt },
+          ],
+          max_tokens: 2000,
+          temperature: 0.9,
+        }),
+      });
+      text = await res.text();
+      if (res.ok) break;
+      console.log(`[ai] attempt ${attempt}: HTTP ${res.status}`);
+    } catch (e) {
+      console.log(`[ai] attempt ${attempt}: ${e.message}`);
+      if (attempt === 3) throw e;
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
 
-  const text = await res.text();
   if (!res.ok) {
     throw new Error(`OpenRouter ${res.status}: ${text.substring(0, 200)}`);
   }
