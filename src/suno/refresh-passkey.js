@@ -28,19 +28,38 @@ export async function refreshPasskeyToken() {
       }, 15000);
 
       ws.on('open', () => {
-        // Inject interceptor
-        const inject = `(function(){function p(t){if(!t||t.__pkAuto)return;t.__pkAuto=1;var e=t.execute.bind(t);t.execute=function(s,p){if(p&&typeof p.callback==='function'){var c=p.callback;p.callback=function(tok){if(tok&&tok.indexOf('P1_')===0)fetch('http://localhost:3099/token',{method:'POST',body:tok});c(tok);};}return e(s,p);};}if(window.turnstile)p(window.turnstile);var _t=window.turnstile;Object.defineProperty(window,'turnstile',{get:()=>_t,set:v=>{_t=v;p(v);},configurable:true});return'ok';})()`;
-        ws.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression: inject } }));
+        // Call turnstile.execute directly — no Create click, no song generation, no credits wasted
+        const inject = `(function(){
+          return new Promise(function(resolve){
+            if(!window.turnstile){resolve('no turnstile');return;}
+            var widgets=document.querySelectorAll('[data-sitekey]');
+            var sitekey=widgets.length?widgets[0].getAttribute('data-sitekey'):null;
+            if(!sitekey){
+              // Try to find sitekey from turnstile internals
+              try{var k=Object.keys(window.turnstile._widgets||{});if(k.length)sitekey=window.turnstile._widgets[k[0]].sitekey;}catch(e){}
+            }
+            if(!sitekey){resolve('no sitekey');return;}
+            try{
+              window.turnstile.execute(sitekey,{callback:function(tok){
+                if(tok&&tok.indexOf('P1_')===0){
+                  fetch('http://localhost:3099/token',{method:'POST',body:tok});
+                  resolve('token_sent:'+tok.length);
+                }else{resolve('bad_token');}
+              }});
+            }catch(e){resolve('exec_error:'+e.message);}
+            setTimeout(function(){resolve('timeout');},10000);
+          });
+        })()`;
+        ws.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression: inject, awaitPromise: true } }));
       });
 
       let step = 0;
       ws.on('message', (data) => {
         step++;
         if (step === 1) {
-          // Click Create
-          const click = `var b=Array.from(document.querySelectorAll('button')).find(x=>x.textContent.includes('Create'));b?(b.click(),'clicked'):'no btn'`;
-          ws.send(JSON.stringify({ id: 2, method: 'Runtime.evaluate', params: { expression: click } }));
-        } else if (step === 2) {
+          const result = JSON.parse(data);
+          const val = result?.result?.result?.value || '';
+          console.log('[passkey-refresh] turnstile result:', val);
           // Wait for passkey-server to receive token
           setTimeout(async () => {
             try {
