@@ -28,38 +28,42 @@ export async function refreshPasskeyToken() {
       }, 15000);
 
       ws.on('open', () => {
-        // Call turnstile.execute directly — no Create click, no song generation, no credits wasted
+        // Intercept fetch to block actual song creation, only capture token
         const inject = `(function(){
-          return new Promise(function(resolve){
-            if(!window.turnstile){resolve('no turnstile');return;}
-            var widgets=document.querySelectorAll('[data-sitekey]');
-            var sitekey=widgets.length?widgets[0].getAttribute('data-sitekey'):null;
-            if(!sitekey){
-              // Try to find sitekey from turnstile internals
-              try{var k=Object.keys(window.turnstile._widgets||{});if(k.length)sitekey=window.turnstile._widgets[k[0]].sitekey;}catch(e){}
+          if(window.__tokenBlocker) return 'already_installed';
+          window.__tokenBlocker = true;
+          var origFetch = window.fetch;
+          window.__capturedToken = null;
+          window.fetch = function(url, opts) {
+            if(opts && opts.body && typeof opts.body === 'string') {
+              try {
+                var d = JSON.parse(opts.body);
+                if(d.token && d.token.indexOf('P1_') === 0) {
+                  window.__capturedToken = d.token;
+                  fetch('http://localhost:3099/token', {method:'POST',body:d.token});
+                  // Block the actual generate request
+                  return Promise.resolve(new Response('{"blocked":true}', {status:200}));
+                }
+              } catch(e) {}
             }
-            if(!sitekey){resolve('no sitekey');return;}
-            try{
-              window.turnstile.execute(sitekey,{callback:function(tok){
-                if(tok&&tok.indexOf('P1_')===0){
-                  fetch('http://localhost:3099/token',{method:'POST',body:tok});
-                  resolve('token_sent:'+tok.length);
-                }else{resolve('bad_token');}
-              }});
-            }catch(e){resolve('exec_error:'+e.message);}
-            setTimeout(function(){resolve('timeout');},10000);
-          });
+            return origFetch.apply(this, arguments);
+          };
+          return 'blocker_installed';
         })()`;
-        ws.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression: inject, awaitPromise: true } }));
+        ws.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression: inject } }));
       });
 
       let step = 0;
       ws.on('message', (data) => {
         step++;
         if (step === 1) {
+          // Blocker installed, now click Create to trigger turnstile
+          const click = `var b=Array.from(document.querySelectorAll('button')).find(x=>x.textContent.includes('Create'));b?(b.click(),'clicked'):'no btn'`;
+          ws.send(JSON.stringify({ id: 2, method: 'Runtime.evaluate', params: { expression: click } }));
+        } else if (step === 2) {
           const result = JSON.parse(data);
           const val = result?.result?.result?.value || '';
-          console.log('[passkey-refresh] turnstile result:', val);
+          console.log('[passkey-refresh] click result:', val);
           // Wait for passkey-server to receive token
           setTimeout(async () => {
             try {
