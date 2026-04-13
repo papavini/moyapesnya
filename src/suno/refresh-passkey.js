@@ -16,7 +16,7 @@
 const CDP_HOST = '127.0.0.1';
 const CDP_PORT = 9223; // RDP Chromium (реальная сессия)
 const PASSKEY_SERVER = 'http://127.0.0.1:3099/token';
-const TIMEOUT_MS = 180000; // 3 min
+const TIMEOUT_MS = 300000; // 5 min (60s wait per attempt × up to 3 attempts)
 
 const FILLS = [
   'Happy birthday song pop upbeat cheerful',  // lyrics
@@ -265,9 +265,9 @@ export async function refreshPasskeyToken() {
       async function navigateToCreate() {
         console.log('[passkey] navigating to /create...');
         await cdpSend('Page.navigate', { url: 'https://suno.com/create' });
-        // Wait for page load + CF challenge to complete (20s)
-        console.log('[passkey] waiting 20s for CF challenge + P1_ refresh...');
-        await new Promise(r => setTimeout(r, 20000));
+        // Wait for page load + CF challenge to complete (60s — Turnstile takes 30-60s silently)
+        console.log('[passkey] waiting 60s for CF challenge + P1_ refresh...');
+        await new Promise(r => setTimeout(r, 60000));
       }
 
       async function forceRefreshAndRetry() {
@@ -275,12 +275,12 @@ export async function refreshPasskeyToken() {
         console.log('[passkey] forcing fresh CF challenge (navigate away and back)...');
         // Navigate away to force full page unload
         await cdpSend('Page.navigate', { url: 'https://suno.com' });
-        await new Promise(r => setTimeout(r, 3000));
+        await new Promise(r => setTimeout(r, 4000));
         if (done) return;
         // Navigate back to /create (fresh CF challenge fires)
         await cdpSend('Page.navigate', { url: 'https://suno.com/create' });
-        console.log('[passkey] waiting 20s for fresh CF challenge + P1_ refresh...');
-        await new Promise(r => setTimeout(r, 20000));
+        console.log('[passkey] waiting 60s for fresh CF challenge + P1_ refresh...');
+        await new Promise(r => setTimeout(r, 60000));
         if (done) return;
         await fillFormAndClickCreate();
       }
