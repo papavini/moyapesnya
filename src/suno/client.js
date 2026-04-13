@@ -63,7 +63,6 @@ export async function generateByDescription(prompt, { instrumental = false } = {
       try {
         const { refreshPasskeyToken } = await import('./refresh-passkey.js');
         await refreshPasskeyToken();
-        await new Promise(r => setTimeout(r, 8000));
       } catch (re) {
         console.log('[suno] refresh failed:', re.message);
       }
@@ -95,8 +94,6 @@ export async function generateCustom({ lyrics, tags, title, instrumental = false
       try {
         const { refreshPasskeyToken } = await import('./refresh-passkey.js');
         await refreshPasskeyToken();
-        // Wait for suno-api to restart with new token
-        await new Promise(r => setTimeout(r, 8000));
       } catch (re) {
         console.log('[suno] refresh failed:', re.message);
       }
