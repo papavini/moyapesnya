@@ -72,12 +72,14 @@ export async function refreshCookie() {
     }, 10000);
   });
 
-  // Фильтруем куки для suno.com
+  // Фильтруем только нужные куки — полный набор даёт "Request Header Fields Too Large"
+  const ESSENTIAL = new Set(['__client', '__client_uat', 'suno_device_id', '__cf_bm', '_cfuvid']);
   const sunoCookies = cookies.filter(c =>
-    c.domain && (c.domain.includes('suno.com') || c.domain.includes('suno.ai'))
+    c.domain && (c.domain.includes('suno.com') || c.domain.includes('suno.ai')) &&
+    (ESSENTIAL.has(c.name) || c.name.startsWith('__client'))
   );
 
-  console.log('[cookie] найдено suno.com куки:', sunoCookies.length);
+  console.log('[cookie] найдено essential куки:', sunoCookies.length, sunoCookies.map(c => c.name).join(', '));
 
   const hasClient = sunoCookies.some(c => c.name === '__client');
   if (!hasClient) {

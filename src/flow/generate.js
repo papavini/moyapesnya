@@ -50,6 +50,7 @@ export async function runGeneration(opts) {
       });
     }
   } catch (e) {
+    console.error('[generate] ошибка генерации:', e.message, e.body ? JSON.stringify(e.body).substring(0, 200) : '');
     return {
       ok: false,
       error: 'Ошибка при отправке в студию. Попробуйте ещё раз.',
