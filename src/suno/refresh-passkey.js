@@ -18,13 +18,15 @@ const CDP_PORT = 9223; // RDP Chromium (реальная сессия)
 const PASSKEY_SERVER = 'http://127.0.0.1:3099/token';
 const TIMEOUT_MS = 300000; // 5 min (60s wait per attempt × up to 3 attempts)
 
-const FILLS = [
+const DEFAULT_FILLS = [
   'Happy birthday song pop upbeat cheerful',  // lyrics
   'pop upbeat cheerful birthday',              // style tags
   'Happy Birthday Song',                       // title
 ];
 
-export async function refreshPasskeyToken() {
+// fills: [lyrics, tags, title] — передай реальные данные пользователя чтобы не создавать мусор
+export async function refreshPasskeyToken(fills) {
+  fills = fills || DEFAULT_FILLS;
   try {
     const { default: WebSocket } = await import('ws');
     const { default: http } = await import('http');
@@ -207,7 +209,7 @@ export async function refreshPasskeyToken() {
         const fillResult = await cdpEval(`(function(){
           var results = [];
           var tas = Array.from(document.querySelectorAll('textarea')).filter(t => t.offsetParent !== null);
-          var fills = ${JSON.stringify(FILLS)};
+          var fills = ${JSON.stringify(fills)};
           var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
           tas.slice(0, 3).forEach(function(ta, i) {
             var text = fills[i] || 'song';

@@ -21,17 +21,17 @@ function isSessionError(e) {
   return e.status === 500 && (body.includes('session id') || body.includes('SUNO_COOKIE'));
 }
 
-async function handleSunoError(e) {
+async function handleSunoError(e, fills) {
   if (isSessionError(e)) {
     console.log('[suno] cookie expired, refreshing via CDP...');
     const { refreshCookie } = await import('./refresh-cookie.js');
-    await refreshCookie(); // includes suno-api restart + wait
+    await refreshCookie();
     return 'cookie';
   }
   if (isTokenError(e)) {
-    console.log('[suno] P1_ token expired, refreshing via CDP...');
+    console.log('[suno] P1_ token expired, refreshing via CDP with user data...');
     const { refreshPasskeyToken } = await import('./refresh-passkey.js');
-    await refreshPasskeyToken();
+    await refreshPasskeyToken(fills); // передаём данные пользователя — не создаём мусор
     await new Promise(r => setTimeout(r, 8000));
     return 'token';
   }
@@ -92,7 +92,9 @@ export async function generateCustom({ lyrics, tags, title, instrumental = false
   try {
     return normalizeClipsResponse(await post('/api/custom_generate', payload));
   } catch (e) {
-    if (await handleSunoError(e)) {
+    // Передаём реальные данные пользователя — при обновлении токена не создаём мусорные песни
+    const fills = [lyrics || '', tags || '', title || ''];
+    if (await handleSunoError(e, fills)) {
       return normalizeClipsResponse(await post('/api/custom_generate', payload));
     }
     throw e;

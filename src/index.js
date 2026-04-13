@@ -26,29 +26,6 @@ async function main() {
     ? `[suno] ok -> ${config.suno.base}`
     : `[suno] не отвечает -> ${config.suno.base} (бот всё равно запустится, команды генерации провалятся)`);
 
-  // Проактивное обновление passkey токена (без трат кредитов — Fetch.failRequest)
-  // ВАЖНО: P1_ живёт ~30 мин в React state браузера. Если истёк → нужна активная сессия в браузере.
-  // Timer срабатывает пока P1_ ещё валиден → успешно перехватывает свежий токен.
-  const runPasskeyRefresh = async (label) => {
-    try {
-      console.log(`[passkey-timer] ${label}...`);
-      const { refreshPasskeyToken } = await import('./suno/refresh-passkey.js');
-      const ok = await refreshPasskeyToken();
-      if (ok) {
-        console.log(`[passkey-timer] ${label}: OK`);
-      } else {
-        console.log(`[passkey-timer] ${label}: FAILED — P1_ истёк в браузере. Запустите: node /tmp/get_token_v2.mjs`);
-      }
-    } catch (e) {
-      console.log(`[passkey-timer] ${label} ошибка:`, e.message);
-    }
-  };
-
-  // Сразу при старте (через 10s) — пока P1_ ещё свежий
-  setTimeout(() => runPasskeyRefresh('старт'), 10000);
-  // Затем каждые 25 мин — раньше истечения 30-минутного окна
-  setInterval(() => runPasskeyRefresh('плановое обновление'), 25 * 60 * 1000);
-
   const shutdowns = [];
 
   if (wantTg) {
