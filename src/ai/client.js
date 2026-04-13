@@ -115,8 +115,8 @@ export async function generateLyrics({ occasion, genre, mood, voice, wishes }) {
             { role: 'user', content: userPrompt },
           ],
           max_tokens: 16000,
-          temperature: 1, // требуется для thinking mode
-          thinking: { type: 'enabled', budget_tokens: 10000 },
+          temperature: 0.9,
+          reasoning: { effort: 'high' },
         }),
       });
       text = await res.text();
