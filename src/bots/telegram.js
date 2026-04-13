@@ -707,20 +707,25 @@ async function handleGenerate(ctx, opts) {
   };
 
   // Встаём в очередь. Если position > 0 — ждём, пока не дойдёт наша очередь.
-  const result = await enqueue(async () => {
-    // Наша очередь подошла — обновляем сообщение
-    if (position > 0) {
-      try {
-        await ctx.api.editMessageText(
-          progressMsg.chat.id,
-          progressMsg.message_id,
-          '✨ Ваша очередь подошла! Начинаем создавать вашу песню…\n' + heartProgress(10),
-        );
-        lastPercent = 10;
-      } catch {}
-    }
-    return runGeneration({ ...opts, onStatus });
-  });
+  let result;
+  try {
+    result = await enqueue(async () => {
+      if (position > 0) {
+        try {
+          await ctx.api.editMessageText(
+            progressMsg.chat.id,
+            progressMsg.message_id,
+            '✨ Ваша очередь подошла! Начинаем создавать вашу песню…\n' + heartProgress(10),
+          );
+          lastPercent = 10;
+        } catch {}
+      }
+      return runGeneration({ ...opts, onStatus });
+    });
+  } catch (e) {
+    console.error('[telegram] enqueue threw:', e.message);
+    result = { ok: false, error: e.message };
+  }
 
   resetSession(PLATFORM, ctx.from.id);
 

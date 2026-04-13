@@ -139,7 +139,15 @@ export async function waitForClips(ids, { onProgress } = {}) {
   const intervalMs = config.suno.pollIntervalSec * 1000;
 
   while (Date.now() < deadline) {
-    const clips = await getClips(ids);
+    let clips;
+    try {
+      clips = await getClips(ids);
+    } catch (e) {
+      // suno-api мог перезапуститься — ждём и повторяем, клипы на стороне SUNO живы
+      console.log('[suno] waitForClips poll error:', e.message, '— retrying...');
+      await new Promise((r) => setTimeout(r, intervalMs * 2));
+      continue;
+    }
     if (onProgress) onProgress(clips);
 
     // Только complete — это финальный трек на cdn1.suno.ai/.mp3 (2-3 минуты).
