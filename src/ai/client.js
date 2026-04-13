@@ -114,8 +114,9 @@ export async function generateLyrics({ occasion, genre, mood, voice, wishes }) {
             { role: 'system', content: SYSTEM_PROMPT },
             { role: 'user', content: userPrompt },
           ],
-          max_tokens: 2000,
-          temperature: 0.9,
+          max_tokens: 16000,
+          temperature: 1, // требуется для thinking mode
+          thinking: { type: 'enabled', budget_tokens: 10000 },
         }),
       });
       text = await res.text();
@@ -133,7 +134,14 @@ export async function generateLyrics({ occasion, genre, mood, voice, wishes }) {
   }
 
   const data = JSON.parse(text);
-  const raw = data.choices?.[0]?.message?.content?.trim();
+  // thinking mode возвращает content как массив блоков [{type:'thinking',...},{type:'text',...}]
+  const content = data.choices?.[0]?.message?.content;
+  let raw;
+  if (Array.isArray(content)) {
+    raw = content.filter(b => b.type === 'text').map(b => b.text).join('').trim();
+  } else {
+    raw = (content || '').trim();
+  }
   if (!raw) {
     throw new Error('AI не вернул текст');
   }
