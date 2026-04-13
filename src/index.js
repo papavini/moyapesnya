@@ -26,6 +26,19 @@ async function main() {
     ? `[suno] ok -> ${config.suno.base}`
     : `[suno] не отвечает -> ${config.suno.base} (бот всё равно запустится, команды генерации провалятся)`);
 
+  // Проактивное обновление passkey токена каждые 30 мин (без трат кредитов — Fetch.failRequest)
+  const PASSKEY_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
+  setInterval(async () => {
+    try {
+      console.log('[passkey-timer] проактивное обновление токена...');
+      const { refreshPasskeyToken } = await import('./suno/refresh-passkey.js');
+      const ok = await refreshPasskeyToken();
+      console.log('[passkey-timer] результат:', ok ? 'OK' : 'FAILED');
+    } catch (e) {
+      console.log('[passkey-timer] ошибка:', e.message);
+    }
+  }, PASSKEY_REFRESH_INTERVAL_MS);
+
   const shutdowns = [];
 
   if (wantTg) {
