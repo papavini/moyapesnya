@@ -96,6 +96,7 @@ export async function generateLyrics({ occasion, genre, mood, voice, wishes }) {
           ],
           max_tokens: 2000,
           temperature: 0.9,
+          reasoning: { effort: 'high' },
         }),
       });
       text = await res.text();
