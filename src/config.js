@@ -26,7 +26,7 @@ export const config = {
   },
   ai: {
     apiKey: process.env.OPENROUTER_API_KEY || '',
-    model: process.env.AI_MODEL || 'google/gemini-3.1-flash-lite-preview',
+    model: process.env.AI_MODEL || 'deepseek/deepseek-v3-2',
     baseUrl: process.env.AI_BASE_URL || 'https://openrouter.ai/api/v1',
   },
   robokassa: {
