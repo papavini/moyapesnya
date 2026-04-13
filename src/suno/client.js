@@ -66,6 +66,8 @@ export async function generateByDescription(prompt, { instrumental = false } = {
       } catch (re) {
         console.log('[suno] refresh failed:', re.message);
       }
+      // Wait for suno-api to fully restart after token refresh
+      await new Promise(r => setTimeout(r, 8000));
       const resp = await post('/api/generate', {
         prompt,
         make_instrumental: instrumental,
@@ -97,6 +99,8 @@ export async function generateCustom({ lyrics, tags, title, instrumental = false
       } catch (re) {
         console.log('[suno] refresh failed:', re.message);
       }
+      // Wait for suno-api to fully restart after token refresh
+      await new Promise(r => setTimeout(r, 8000));
       // Retry
       const resp = await post('/api/custom_generate', {
         prompt: lyrics,
