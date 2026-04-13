@@ -96,7 +96,6 @@ export async function generateLyrics({ occasion, genre, mood, voice, wishes }) {
           ],
           max_tokens: 2000,
           temperature: 0.9,
-          response_format: { type: 'json_object' },
         }),
       });
       text = await res.text();

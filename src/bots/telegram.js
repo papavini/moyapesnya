@@ -261,12 +261,8 @@ export function createTelegramBot() {
     } catch (e) {
       console.error('[telegram] AI ошибка:', e.message, e.stack?.substring(0, 200));
       await ctx.api.editMessageText(lyricsMsg.chat.id, lyricsMsg.message_id,
-        '⚠️ Генератор текста временно недоступен, создаём по описанию…');
-      setState(PLATFORM, ctx.from.id, 'generating');
-      await handleGenerate(ctx, {
-        mode: 'description',
-        prompt: buildPrompt({ occasion, genre, mood, voice, wishes }),
-      });
+        '⚠️ Не удалось сочинить текст. Попробуйте ещё раз — /start');
+      resetSession(PLATFORM, ctx.from.id);
       return;
     }
 
