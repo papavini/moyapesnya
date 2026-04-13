@@ -12,6 +12,32 @@
 import { fetch } from 'undici';
 import { config } from '../config.js';
 
+function isTokenError(e) {
+  return e.status === 422 || (e.message && e.message.includes('Token'));
+}
+
+function isSessionError(e) {
+  const body = typeof e.body === 'object' ? JSON.stringify(e.body) : String(e.body || '');
+  return e.status === 500 && (body.includes('session id') || body.includes('SUNO_COOKIE'));
+}
+
+async function handleSunoError(e) {
+  if (isSessionError(e)) {
+    console.log('[suno] cookie expired, refreshing via CDP...');
+    const { refreshCookie } = await import('./refresh-cookie.js');
+    await refreshCookie(); // includes suno-api restart + wait
+    return 'cookie';
+  }
+  if (isTokenError(e)) {
+    console.log('[suno] P1_ token expired, refreshing via CDP...');
+    const { refreshPasskeyToken } = await import('./refresh-passkey.js');
+    await refreshPasskeyToken();
+    await new Promise(r => setTimeout(r, 8000));
+    return 'token';
+  }
+  return null;
+}
+
 class SunoError extends Error {
   constructor(message, { status, body } = {}) {
     super(message);
@@ -50,66 +76,24 @@ async function get(path) {
 }
 
 export async function generateByDescription(prompt, { instrumental = false } = {}) {
+  const payload = { prompt, make_instrumental: instrumental, wait_audio: false };
   try {
-    const resp = await post('/api/generate', {
-      prompt,
-      make_instrumental: instrumental,
-      wait_audio: false,
-    });
-    return normalizeClipsResponse(resp);
+    return normalizeClipsResponse(await post('/api/generate', payload));
   } catch (e) {
-    if (e.status === 422 || (e.message && e.message.includes('Token'))) {
-      console.log('[suno] token expired, refreshing via CDP...');
-      try {
-        const { refreshPasskeyToken } = await import('./refresh-passkey.js');
-        await refreshPasskeyToken();
-      } catch (re) {
-        console.log('[suno] refresh failed:', re.message);
-      }
-      // Wait for suno-api to fully restart after token refresh
-      await new Promise(r => setTimeout(r, 8000));
-      const resp = await post('/api/generate', {
-        prompt,
-        make_instrumental: instrumental,
-        wait_audio: false,
-      });
-      return normalizeClipsResponse(resp);
+    if (await handleSunoError(e)) {
+      return normalizeClipsResponse(await post('/api/generate', payload));
     }
     throw e;
   }
 }
 
 export async function generateCustom({ lyrics, tags, title, instrumental = false }) {
+  const payload = { prompt: lyrics, tags, title, make_instrumental: instrumental, wait_audio: false };
   try {
-    const resp = await post('/api/custom_generate', {
-      prompt: lyrics,
-      tags,
-      title,
-      make_instrumental: instrumental,
-      wait_audio: false,
-    });
-    return normalizeClipsResponse(resp);
+    return normalizeClipsResponse(await post('/api/custom_generate', payload));
   } catch (e) {
-    // If token expired, refresh and retry once
-    if (e.status === 422 || (e.message && e.message.includes('Token'))) {
-      console.log('[suno] token expired, refreshing via CDP...');
-      try {
-        const { refreshPasskeyToken } = await import('./refresh-passkey.js');
-        await refreshPasskeyToken();
-      } catch (re) {
-        console.log('[suno] refresh failed:', re.message);
-      }
-      // Wait for suno-api to fully restart after token refresh
-      await new Promise(r => setTimeout(r, 8000));
-      // Retry
-      const resp = await post('/api/custom_generate', {
-        prompt: lyrics,
-        tags,
-        title,
-        make_instrumental: instrumental,
-        wait_audio: false,
-      });
-      return normalizeClipsResponse(resp);
+    if (await handleSunoError(e)) {
+      return normalizeClipsResponse(await post('/api/custom_generate', payload));
     }
     throw e;
   }
