@@ -6,6 +6,7 @@ import { pingSuno, getCreditsLeft } from '../suno/client.js';
 import { generateLyrics } from '../ai/client.js';
 import { createInvoiceUrl, generateInvId } from '../payment/robokassa.js';
 import { setPayment, getPayment, findPaymentByUser } from '../store.js';
+import { checkAndUseCode, isUserVerified, getCodesStatus } from '../access-codes.js';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
@@ -134,9 +135,8 @@ export function createTelegramBot() {
   assertBotConfig('telegram');
   const bot = new Bot(config.telegram.token);
 
-  // /start
-  bot.command('start', async (ctx) => {
-    resetSession(PLATFORM, ctx.from.id);
+  // Вспомогательная функция — показать welcome видео
+  async function sendWelcome(ctx) {
     try {
       const video = welcomeVideoFileId || new InputFile(WELCOME_VIDEO_PATH);
       const sent = await ctx.replyWithVideo(video, {
@@ -156,6 +156,25 @@ export function createTelegramBot() {
         reply_markup: new InlineKeyboard().text('🎤 Создать свою песню', 'create').danger(),
       });
     }
+  }
+
+  // /start
+  bot.command('start', async (ctx) => {
+    resetSession(PLATFORM, ctx.from.id);
+
+    // Закрытый бета-тест: проверяем верификацию
+    if (!isUserVerified(ctx.from.id)) {
+      setState(PLATFORM, ctx.from.id, 'awaiting_code');
+      await ctx.reply(
+        '🔐 <b>Добро пожаловать!</b>\n\n' +
+        'Сейчас бот работает в закрытом бета-тестировании.\n\n' +
+        'Введите ваш <b>6-значный код доступа</b>:',
+        { parse_mode: 'HTML' },
+      );
+      return;
+    }
+
+    await sendWelcome(ctx);
   });
 
   // Кнопка "Создать свою песню" → Вопрос 1/5
@@ -420,6 +439,21 @@ export function createTelegramBot() {
 
     const session = getSession(PLATFORM, userId);
 
+    // Проверка кода доступа
+    if (session.state === 'awaiting_code') {
+      const result = checkAndUseCode(text, userId);
+      if (result === 'ok') {
+        resetSession(PLATFORM, userId);
+        await ctx.reply('✅ Код принят! Добро пожаловать 🎵');
+        await sendWelcome(ctx);
+      } else if (result === 'used') {
+        await ctx.reply('❌ Этот код уже использован другим пользователем.\n\nВведите другой код доступа:');
+      } else {
+        await ctx.reply('❌ Неверный код. Попробуйте ещё раз:');
+      }
+      return;
+    }
+
     if (session.state === 'awaiting_occasion_custom') {
       setState(PLATFORM, userId, 'awaiting_genre', { occasion: text });
       await ctx.reply('Вопрос 2/5. Выберите жанр для вашей песни☝️', {
@@ -537,6 +571,24 @@ export function createTelegramBot() {
         ? `✅ Студия на связи${credits != null ? `\n💎 Кредитов осталось: ${credits}` : ''}`
         : '❌ Студия пока недоступна.',
     );
+  });
+
+  // /codes — статус кодов доступа (только для admins)
+  bot.command('codes', async (ctx) => {
+    const statuses = getCodesStatus();
+    const free = statuses.filter(s => !s.used);
+    const used = statuses.filter(s => s.used);
+    const lines = [
+      `🔑 <b>Коды доступа (бета-тест)</b>`,
+      `Свободно: ${free.length} | Использовано: ${used.length}`,
+      '',
+      ...statuses.map(s =>
+        s.used
+          ? `✅ <code>${s.code}</code> → user ${s.userId}`
+          : `⬜ <code>${s.code}</code>`
+      ),
+    ];
+    await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
   });
 
   bot.catch((err) => {
