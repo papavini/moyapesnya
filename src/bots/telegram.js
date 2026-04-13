@@ -7,6 +7,7 @@ import { generateLyrics } from '../ai/client.js';
 import { createInvoiceUrl, generateInvId } from '../payment/robokassa.js';
 import { setPayment, getPayment, findPaymentByUser } from '../store.js';
 import { checkAndUseCode, isUserVerified, getCodesStatus } from '../access-codes.js';
+import { enqueue, getNextPosition } from '../queue.js';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
@@ -661,6 +662,7 @@ export function createTelegramBot() {
 
 async function handleGenerate(ctx, opts) {
   console.log('[telegram] handleGenerate called, mode:', opts.mode, 'has lyrics:', !!opts.lyrics);
+
   // Мотивационное сообщение
   await ctx.reply(
     '🥺 Не каждый подарок умеет говорить "я рядом"…\n\n' +
@@ -669,10 +671,20 @@ async function handleGenerate(ctx, opts) {
     { parse_mode: 'HTML' },
   );
 
-  // Сообщение прогресса (будем редактировать)
-  const progressMsg = await ctx.reply('Начали сочинять вашу песню\n' + heartProgress(10));
+  // Проверяем очередь ДО входа в неё
+  const position = getNextPosition(); // 0 = сразу, 1+ = ждать
+  const waitMin = Math.round(position * 4); // ~4 мин на генерацию
 
-  let lastPercent = 10;
+  const queueText = position > 0
+    ? `🕐 <b>Вы в очереди — позиция ${position + 1}</b>\n\n` +
+      `Сейчас создаём песню для другого пользователя. Примерное ожидание: ~${waitMin} мин.\n` +
+      `Не закрывайте чат — мы пришлём вашу песню сразу как только она будет готова! 🎵`
+    : 'Начали сочинять вашу песню\n' + heartProgress(10);
+
+  // Сообщение прогресса (будем редактировать)
+  const progressMsg = await ctx.reply(queueText, { parse_mode: 'HTML' });
+
+  let lastPercent = position > 0 ? 0 : 10;
   const editProgress = async (label, percent) => {
     if (percent === lastPercent) return;
     lastPercent = percent;
@@ -698,7 +710,22 @@ async function handleGenerate(ctx, opts) {
     }
   };
 
-  const result = await runGeneration({ ...opts, onStatus });
+  // Встаём в очередь. Если position > 0 — ждём, пока не дойдёт наша очередь.
+  const result = await enqueue(async () => {
+    // Наша очередь подошла — обновляем сообщение
+    if (position > 0) {
+      try {
+        await ctx.api.editMessageText(
+          progressMsg.chat.id,
+          progressMsg.message_id,
+          '✨ Ваша очередь подошла! Начинаем создавать вашу песню…\n' + heartProgress(10),
+        );
+        lastPercent = 10;
+      } catch {}
+    }
+    return runGeneration({ ...opts, onStatus });
+  });
+
   resetSession(PLATFORM, ctx.from.id);
 
   if (!result.ok) {
