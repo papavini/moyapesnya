@@ -730,6 +730,7 @@ async function handleGenerate(ctx, opts) {
   resetSession(PLATFORM, ctx.from.id);
 
   if (!result.ok) {
+    console.error('[telegram] генерация не удалась:', result.error || '(неизвестно)');
     try {
       await ctx.api.editMessageText(
         progressMsg.chat.id,
@@ -750,12 +751,15 @@ async function handleGenerate(ctx, opts) {
     );
   } catch { /* ignore */ }
 
+  console.log('[telegram] доставляем', result.clips.length, 'клипов пользователю', ctx.from.id);
   for (const clip of result.clips) {
     const caption = (clip.title ? `🎵 ${clip.title}\n\n` : '🎵 Ваша персональная песня!\n\n') +
       'Хотите ещё одну? /start';
     try {
       await ctx.replyWithAudio(clip.audioUrl, { caption });
-    } catch {
+      console.log('[telegram] клип отправлен:', clip.id?.substring(0, 8), clip.audioUrl?.substring(0, 50));
+    } catch (e) {
+      console.error('[telegram] sendAudio failed, fallback to link:', e.message);
       await ctx.reply(`🎵 ${clip.title || 'Ваш трек'}\n${clip.audioUrl}\n\nХотите ещё? /start`);
     }
   }
