@@ -80,24 +80,33 @@ export async function generateByDescription(prompt, { instrumental = false } = {
   try {
     return normalizeClipsResponse(await post('/api/generate', payload));
   } catch (e) {
-    if (await handleSunoError(e)) {
+    if (!await handleSunoError(e)) throw e;
+    try {
+      return normalizeClipsResponse(await post('/api/generate', payload));
+    } catch (e2) {
+      if (!await handleSunoError(e2)) throw e2;
       return normalizeClipsResponse(await post('/api/generate', payload));
     }
-    throw e;
   }
 }
 
 export async function generateCustom({ lyrics, tags, title, instrumental = false }) {
   const payload = { prompt: lyrics, tags, title, make_instrumental: instrumental, wait_audio: false };
+  const fills = [lyrics || '', tags || '', title || ''];
   try {
     return normalizeClipsResponse(await post('/api/custom_generate', payload));
   } catch (e) {
-    // Передаём реальные данные пользователя — при обновлении токена не создаём мусорные песни
-    const fills = [lyrics || '', tags || '', title || ''];
-    if (await handleSunoError(e, fills)) {
+    // Первая ошибка: 500→cookie или 422→passkey
+    if (!await handleSunoError(e, fills)) throw e;
+    // Первый retry — может получить вторичную ошибку (напр. 500→cookie→422)
+    try {
+      return normalizeClipsResponse(await post('/api/custom_generate', payload));
+    } catch (e2) {
+      // Вторичная ошибка после первого fix: обрабатываем снова
+      if (!await handleSunoError(e2, fills)) throw e2;
+      // Финальный retry
       return normalizeClipsResponse(await post('/api/custom_generate', payload));
     }
-    throw e;
   }
 }
 
@@ -180,23 +189,35 @@ export async function pingSuno() {
 }
 
 /**
- * Проверяет что токен жив и обновляет passkey перед генерацией.
+ * Проверяет что suno-api жив и cookie валидна. При 500 — обновляет cookie.
+ * Возвращает false только если после refresh всё ещё недоступно (Clerk session expired).
  */
 export async function ensureTokenAlive() {
-  // 1. Check API is reachable
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const res = await fetch(`${config.suno.base}/api/get_limit`);
-      if (res.ok) break;
+      if (res.ok) return true;
       console.log(`[suno] проверка попытка ${attempt}: HTTP ${res.status}`);
     } catch (e) {
       console.log(`[suno] проверка попытка ${attempt}: ${e.message}`);
-      if (attempt === 3) return false;
     }
     if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
   }
 
-  return true;
+  // Все 3 попытки провалились — обновляем cookie
+  console.log('[suno] suno-api недоступен, обновляем cookie...');
+  try {
+    const { refreshCookie } = await import('./refresh-cookie.js');
+    await refreshCookie();
+    await new Promise(r => setTimeout(r, 2000));
+    const res = await fetch(`${config.suno.base}/api/get_limit`);
+    if (res.ok) return true;
+    console.log('[suno] после refresh всё ещё недоступен — Clerk сессия истекла?');
+  } catch (e) {
+    console.log('[suno] ошибка cookie refresh в ensureTokenAlive:', e.message);
+  }
+
+  return false;
 }
 
 export { SunoError };
