@@ -189,14 +189,20 @@ export async function pingSuno() {
 }
 
 /**
- * Проверяет что suno-api жив и cookie валидна. При 500 — обновляет cookie.
- * Возвращает false только если после refresh всё ещё недоступно (Clerk session expired).
+ * Проверяет что suno-api жив и cookie валидна.
+ * Refresh cookie делает ТОЛЬКО при session error (500 + "session id" / "SUNO_COOKIE" в теле).
+ * При любом другом 500 — не трогает куку, пропускает генерацию (handleSunoError сам разберётся).
  */
 export async function ensureTokenAlive() {
+  let lastStatus = null;
+  let lastBody = '';
+
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const res = await fetch(`${config.suno.base}/api/get_limit`);
       if (res.ok) return true;
+      lastStatus = res.status;
+      lastBody = await res.text().catch(() => '');
       console.log(`[suno] проверка попытка ${attempt}: HTTP ${res.status}`);
     } catch (e) {
       console.log(`[suno] проверка попытка ${attempt}: ${e.message}`);
@@ -204,8 +210,17 @@ export async function ensureTokenAlive() {
     if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
   }
 
-  // Все 3 попытки провалились — обновляем cookie
-  console.log('[suno] suno-api недоступен, обновляем cookie...');
+  // Обновляем куку только если это именно session error — не любой 500
+  const isSession = lastStatus === 500 &&
+    (lastBody.includes('session') || lastBody.includes('SUNO_COOKIE'));
+
+  if (!isSession) {
+    // Другая ошибка — не трогаем куку, пропускаем; handleSunoError в generateCustom сам справится
+    console.log('[suno] 3x не-OK (не session error) — пропускаем, пробуем генерацию');
+    return true;
+  }
+
+  console.log('[suno] session error, обновляем cookie...');
   try {
     const { refreshCookie } = await import('./refresh-cookie.js');
     await refreshCookie();
@@ -214,7 +229,7 @@ export async function ensureTokenAlive() {
     if (res.ok) return true;
     console.log('[suno] после refresh всё ещё недоступен — Clerk сессия истекла?');
   } catch (e) {
-    console.log('[suno] ошибка cookie refresh в ensureTokenAlive:', e.message);
+    console.log('[suno] ошибка cookie refresh:', e.message);
   }
 
   return false;
