@@ -74,7 +74,7 @@ Credits списываются. Повторная генерация обычн
 - `ensureTokenAlive`: при 3x 500 **с session error в теле** делает cookie refresh (не на любой 500!)
 - `generateCustom`/`generateByDescription`: вложенный try-catch — 3 попытки, 2 fix-цикла (500→cookie→422→passkey каскад)
 - `telegram.js`: добавлены логи при доставке (`[telegram] доставляем N клипов`) и ошибке
-- Подтверждено: песни доставлены пользователю ✅
+- Тест авто-восстановления (14.04): сломали cookie → 3x 500 → session error → refreshCookie() → 2 клипа доставлены ✅
 - Деплой: commit f560d28, credits 2020/2500
 
 ## Done (2026-04-13)

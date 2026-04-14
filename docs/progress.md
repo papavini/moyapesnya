@@ -144,6 +144,18 @@ wsl -d Ubuntu-20.04 -- ssh alexander@192.168.0.128 \
 **Проблема:** retry после cookie refresh не имел своего catch. Если retry получал 422 — ошибка улетала в generate.js, пользователь видел "Не получилось".
 **Фикс:** вложенный try-catch, до 3 попыток с 2 циклами fix: 500→cookie→retry→422→passkey→retry→success.
 
+### 2026-04-14 — Тест авто-восстановления cookie (подтверждено)
+**Сценарий:** намеренно записали `BROKEN_COOKIE=invalid` в `suno_cookie.txt`, перезапустили suno-api.
+**Результат:**
+```
+ensureTokenAlive: 3x HTTP 500
+  → тело ответа содержит "session id" → session error подтверждён
+  → refreshCookie() → CDP :9223 → 5 essential кук → suno_cookie.txt → restart suno-api
+  → suno-api запущен ✅
+  → generateCustom → 2 клипа → доставлены пользователю ✅
+```
+Время восстановления: ~12 секунд (3x проверка + CDP + restart + wait). Пользователь не видит ошибки.
+
 ### 2026-04-14 — Логи при доставке песен (commit 4b71685)
 Добавлены `console.log` при отправке клипов пользователю и при ошибке генерации. Теперь в journalctl видно: `[telegram] доставляем N клипов пользователю ID` и `[telegram] клип отправлен: XXXXXXXX`.
 
