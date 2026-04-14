@@ -81,8 +81,10 @@ JWT HS256, ~1870 chars. Источник: CF Turnstile invisible challenge на 
 **До генерации — `ensureTokenAlive`:**
 1. Пробует `/api/get_limit` трижды (с интервалом 3 сек)
 2. Если OK → продолжает
-3. Если 3x 500 → сразу обновляет cookie, проверяет снова
-4. Если после refresh всё ещё плохо → возвращает false → пользователь видит "студия недоступна"
+3. Если 3x 500 — читает тело ответа:
+   - Тело содержит `session` / `SUNO_COOKIE` → это session error → обновляет cookie, проверяет снова
+   - Другой 500 (глюк, перегрузка) → **не трогает куку**, продолжает (`return true`) — handleSunoError в generateCustom разберётся
+4. Если после refresh всё ещё session error → возвращает false → "студия недоступна"
 
 **Во время генерации — `handleSunoError` в generateCustom:**
 ```
@@ -93,7 +95,7 @@ JWT HS256, ~1870 chars. Источник: CF Turnstile invisible challenge на 
   └── если снова ошибка → снова handleSunoError
 Попытка 3 (финальная)
 ```
-Таким образом каскад 500→cookie→422→passkey обрабатывается полностью.
+Каскад 500→cookie→422→passkey обрабатывается полностью. Рабочий токен никогда не перезаписывается зря.
 
 ### Store in-memory
 Сессии хранятся в RAM. При рестарте сервиса — теряются.
@@ -133,9 +135,10 @@ wsl -d Ubuntu-20.04 -- ssh alexander@192.168.0.128 \
 **Проблема:** скрипт таймера использовал бот-хромиум (CDP :9222) вместо RDP-хромиума с реальной сессией (CDP :9223). Мог записывать неправильные или слишком большие cookie.
 **Фикс:** скрипт переписан — делегирует в `node /home/alexander/projects/do-cookie-refresh.mjs`, который вызывает `src/suno/refresh-cookie.js` (правильный порт, 5 essential кук).
 
-### 2026-04-14 — ensureTokenAlive: проактивный refresh при 3x 500 (commit 422797d)
-**Проблема:** ensureTokenAlive видел 3x 500 и молча возвращал true. generateCustom потом снова получал 500 и делал cookie refresh — двойная работа и задержка.
-**Фикс:** при 3x 500 сразу запускает refreshCookie(), проверяет снова. Если после refresh всё ещё недоступно — возвращает false (Clerk сессия истекла, нужен ручной вход).
+### 2026-04-14 — ensureTokenAlive: умный refresh по телу ответа (commit f560d28)
+**Проблема 1:** ensureTokenAlive видел 3x 500 и молча возвращал true → generateCustom получал то же 500 и делал cookie refresh — двойная работа.
+**Проблема 2:** ensureTokenAlive делал refresh на ЛЮБОЙ 500 → перезаписывал рабочий токен при временных глюках suno-api.
+**Фикс:** читает тело ответа. Refresh только если тело содержит `session` / `SUNO_COOKIE`. Другие 500 — не трогает куку, пропускает в generateCustom.
 
 ### 2026-04-14 — generateCustom: каскадная обработка ошибок (commit 422797d)
 **Проблема:** retry после cookie refresh не имел своего catch. Если retry получал 422 — ошибка улетала в generate.js, пользователь видел "Не получилось".

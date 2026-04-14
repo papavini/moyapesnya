@@ -73,7 +73,7 @@ P1_ токен (JWT HS256, ~1900 chars) менее критичен: тест с
 `__client`, `__client_uat`, `__client_uat_Jnxw-muT`, `__client_Jnxw-muT`, `suno_device_id`
 
 **Когда обновляется:**
-- Перед каждой генерацией: `ensureTokenAlive` делает 3 пробы get_limit, при 3x 500 → refreshCookie()
+- Перед каждой генерацией: `ensureTokenAlive` делает 3 пробы get_limit, при 3x 500 **с session error в теле** → refreshCookie() (другой 500 не трогает куку)
 - Во время генерации: при HTTP 500 "session id" → `handleSunoError` → refreshCookie()
 - Вручную: `wsl -d Ubuntu-20.04 -- ssh alexander@192.168.0.128 'node -e "import(\"./src/suno/refresh-cookie.js\").then(m=>m.refreshCookie())"'`
 
