@@ -6,10 +6,10 @@
 |---|---|
 | Telegram бот — основной флоу | ✅ Работает |
 | Доступ по коду (бета-тест) | ✅ Активен (20 кодов) |
-| AI генерация текстов (Claude Sonnet 4.6) | ✅ Работает |
+| AI генерация текстов (Gemini 2.5 Pro) | ✅ Работает |
 | SUNO генерация треков | ✅ Работает |
-| Cookie авто-refresh (CDP) | ✅ Работает |
-| Passkey авто-refresh (CDP) | ✅ Работает (on 422) |
+| Cookie авто-refresh (CDP, on-demand) | ✅ Работает |
+| Passkey авто-refresh (CDP, on-demand) | ✅ Работает (on 422) |
 | Очередь генерации | ✅ Работает (1 за раз) |
 | Robokassa paywall | ⏸ Выключена (PAYWALL_ENABLED=false) |
 | VK-бот | ⏸ Отключён (токен не задан) |
@@ -57,7 +57,7 @@ JWT HS256, ~1870 chars. Источник: CF Turnstile invisible challenge на 
 - Таймер каждые 25 мин **убран** (создавал мусор)
 
 ### AI — промпт поэта (src/ai/client.js)
-Модель: `anthropic/claude-sonnet-4.6` via OpenRouter.
+Модель: `google/gemini-2.5-pro` via OpenRouter, режим `reasoning: { effort: 'high' }`, temperature 0.9.
 
 Ключевые правила промпта:
 - **Грамматика > Рифма**: если рифма ломает грамматику — откажись от рифмы
@@ -76,13 +76,24 @@ JWT HS256, ~1870 chars. Источник: CF Turnstile invisible challenge на 
 - Модель: `chirp-fenix` (v5.5)
 - suno-api патчит URL в `.next/server/chunks/669.js` на `studio-api-prod.suno.com`
 
-### handleSunoError (src/suno/client.js)
-Единая функция обработки ошибок SUNO:
-```js
-500 + "session id" → refreshCookie()  // cookie протухла
-422 + "Token"      → refreshPasskeyToken(fills)  // P1_ (менее критично)
+### ensureTokenAlive + handleSunoError (src/suno/client.js)
+
+**До генерации — `ensureTokenAlive`:**
+1. Пробует `/api/get_limit` трижды (с интервалом 3 сек)
+2. Если OK → продолжает
+3. Если 3x 500 → сразу обновляет cookie, проверяет снова
+4. Если после refresh всё ещё плохо → возвращает false → пользователь видит "студия недоступна"
+
+**Во время генерации — `handleSunoError` в generateCustom:**
 ```
-После refresh — автоматический ретрай запроса.
+Попытка 1: POST /api/custom_generate
+  └── 500 "session id" → refreshCookie()
+  └── 422 "Token"      → refreshPasskeyToken(fills)
+Попытка 2 (после 1-го fix):
+  └── если снова ошибка → снова handleSunoError
+Попытка 3 (финальная)
+```
+Таким образом каскад 500→cookie→422→passkey обрабатывается полностью.
 
 ### Store in-memory
 Сессии хранятся в RAM. При рестарте сервиса — теряются.
@@ -111,6 +122,31 @@ wsl -d Ubuntu-20.04 -- ssh alexander@192.168.0.128 \
 ```
 
 ## История ключевых изменений
+
+### 2026-04-14 — Отключены все proactive таймеры (passkey-refresh, cookie-refresh)
+**Проблема:** `passkey-refresh.timer` (каждые 25 мин) и `cookie-refresh.timer` рестартовали suno-api произвольно — прямо во время polling'а waitForClips. Пользователи получали 500-ошибки.
+**Причина была скрыта:** systemd-таймеры продолжали работать даже после того как setTimeout-код был убран из index.js.
+**Фикс:** `sudo systemctl disable --now passkey-refresh.timer cookie-refresh.timer`
+Вся логика refresh теперь on-demand: проверка перед генерацией (ensureTokenAlive) + обработка ошибок во время генерации (handleSunoError).
+
+### 2026-04-14 — cookie-refresh.sh починен (порт 9222 → 9223)
+**Проблема:** скрипт таймера использовал бот-хромиум (CDP :9222) вместо RDP-хромиума с реальной сессией (CDP :9223). Мог записывать неправильные или слишком большие cookie.
+**Фикс:** скрипт переписан — делегирует в `node /home/alexander/projects/do-cookie-refresh.mjs`, который вызывает `src/suno/refresh-cookie.js` (правильный порт, 5 essential кук).
+
+### 2026-04-14 — ensureTokenAlive: проактивный refresh при 3x 500 (commit 422797d)
+**Проблема:** ensureTokenAlive видел 3x 500 и молча возвращал true. generateCustom потом снова получал 500 и делал cookie refresh — двойная работа и задержка.
+**Фикс:** при 3x 500 сразу запускает refreshCookie(), проверяет снова. Если после refresh всё ещё недоступно — возвращает false (Clerk сессия истекла, нужен ручной вход).
+
+### 2026-04-14 — generateCustom: каскадная обработка ошибок (commit 422797d)
+**Проблема:** retry после cookie refresh не имел своего catch. Если retry получал 422 — ошибка улетала в generate.js, пользователь видел "Не получилось".
+**Фикс:** вложенный try-catch, до 3 попыток с 2 циклами fix: 500→cookie→retry→422→passkey→retry→success.
+
+### 2026-04-14 — Логи при доставке песен (commit 4b71685)
+Добавлены `console.log` при отправке клипов пользователю и при ошибке генерации. Теперь в journalctl видно: `[telegram] доставляем N клипов пользователю ID` и `[telegram] клип отправлен: XXXXXXXX`.
+
+### 2026-04-14 — AI модель: google/gemini-2.5-pro + reasoning:high
+Лучшее качество русских стихов из всех протестированных. Путь: Gemini Flash → Claude Sonnet → DeepSeek → Claude Opus → Claude Sonnet 4.6 → **Gemini 2.5 Pro**.
+Режим thinking (`reasoning: { effort: 'high' }`), temperature 0.9, max_tokens 16000.
 
 ### 2026-04-13 — Убран проактивный таймер P1_ (commit 3b997d2)
 **Проблема:** каждые 25 мин создавалась мусорная песня ("Another Year Around the Sun") в SUNO аккаунте.
