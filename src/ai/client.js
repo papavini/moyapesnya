@@ -294,9 +294,9 @@ export async function generateLyrics({ occasion, genre, mood, voice, wishes }) {
             { role: 'system', content: SYSTEM_PROMPT },
             { role: 'user', content: userPrompt },
           ],
-          max_tokens: 32000,
-          temperature: 0.8,
-          reasoning: { effort: 'high' },
+          max_tokens: 16000,
+          temperature: 1,
+          thinking: { type: 'enabled', budget_tokens: 8000 },
         }),
       });
       text = await res.text();
