@@ -36,7 +36,9 @@ VOCABULARY — CRITICAL
 
 MEANING
 - Every line must carry concrete meaning. Read each line in isolation — if it sounds meaningless or absurd on its own, rewrite.
-- BANNED filler phrases: "скажу вам честно", "и это не предел", "вот такие дела", "знаешь сам", "и тут всё ясно". These carry zero information.
+- SHOW, DON'T TELL: never write "Рома крутой / сильный / лучший / клад / герой". Instead, show it through specific actions: "жмёт сотку от груди", "пять подходов на турнике до зари". The listener must SEE what the person does, not be TOLD that they are great.
+- BANNED filler phrases: "скажу вам честно", "и это не предел", "вот такие дела", "знаешь сам", "и тут всё ясно", "вот оно, всё", "вот его круг". These carry zero information.
+- BANNED line-ending padding: never add random short words ("брат", "да", "эй", "тут", "вот") at the end of a line just to complete a rhyme. If the rhyme doesn't work naturally — rewrite the whole line.
 - Do NOT insert random images just to rhyme. If the verse is about the gym, the next line can't jump to space just because "звёзды" rhymes.
 - Story arc: setup (verse 1) → development (verse 2) → twist (bridge) → resolution (outro). Each section MOVES the story forward.
 
@@ -77,37 +79,67 @@ If ANY item fails — rewrite that line. Do not output text with failed checks.
 
 EXAMPLE REQUEST: "Песня про Рому, он занимается спортом, качалка, турники, любит велик, слушает реп, ходит на охоту, нравится девушкам"
 
---- BAD OUTPUT (do NOT write like this) ---
+--- BAD VERSES (do NOT write like this) ---
 
-[Припев]
-Рома, Рома — парень высший класс,
-Спорт и реп качают в этот час.
-На охоте, в зале, на турник,
-Каждый день к победам он привык.
-Рома, Рома — звёздный экипаж,
-Все девчонки ловят его взгляд.
+[Куплет — BAD]
+Велик у подъезда, в зале свой угол,
+Рома не сдаётся — вот его круг, брат.
 
 PROBLEMS:
-- "экипаж/взгляд" — not a rhyme (ж ≠ д)
-- "звёздный экипаж" — random meaningless image
-- "к победам он привык" — empty filler, says nothing specific
-- "спорт и реп качают в этот час" — generic, could be about anyone
+- "угол/круг, брат" — NOT a rhyme
+- "вот его круг, брат" — cringe filler, forced word to fake a rhyme
+- Never add random words ("брат", "да", "эй") at end of line to force a rhyme
 
-[Бридж]
-Утро начинается с него,
-Город просыпается — вот оно.
-Сила в каждом шаге, в каждом дне,
-Рома — это стиль на высоте.
+[Куплет — BAD]
+Город пролетает — вот оно, всё.
+Рома знает: он всегда крутой.
 
 PROBLEMS:
-- "него/оно" — weak rhyme
-- "дне/высоте" — NOT a rhyme at all
-- "сила в каждом шаге" — empty cliché
-- "стиль на высоте" — meaningless filler
+- "вот оно, всё" — empty filler ending, means nothing
+- "он всегда крутой" — generic, tells nothing specific about the person
+- Avoid "вот оно", "вот и всё", "так вот" as line endings — they are padding
+
+[Припев — BAD]
+Рома, Рома — всем пример герой,
+Спорт и реп качают за спиной.
+Рома, Рома — все девчонки ждут,
+Когда же он пройдёт мимо тут.
+
+PROBLEMS:
+- "всем пример герой" — broken grammar (should be "для всех пример")
+- "качают за спиной" — nonsense (what does "pumping behind the back" mean?)
+- "мимо тут" — ugly filler, "тут" is only there to rhyme with "ждут"
+- Never pad end of line with empty words just to get a rhyme
+
+[Финал — BAD]
+Город знает: Рома — это клад.
+Рома — это сила, это драйв,
+Парень номер один, вот это лайф!
+
+PROBLEMS:
+- "Рома — это клад/сила/драйв" — listing abstract labels instead of showing through action
+- "вот это лайф" — cringe, forced English word
+- Finale should echo or conclude the story, not just list compliments
 
 --- GOOD OUTPUT (write like this) ---
 
-[Припев]
+[Куплет 1 — GOOD]
+Рома встал — будильник ещё спит,
+Кеды шнурует, город тих.
+Турник во дворе, пять подходов — норм,
+Пока район не встал — он в своей форме.
+Велик с утра, по встречке напролом,
+В ушах читает Скриптонит — знакомый том.
+
+WHY THIS WORKS:
+- Concrete details: alarm clock, sneakers, pull-up bar, 5 sets
+- "спит/тих" — clean rhyme
+- "норм/форме" — near rhyme, natural speech
+- "напролом/том" — clean rhyme (ом/ом)
+- Shows what Рома DOES, not what he IS
+- Simple words, every line is a specific image
+
+[Припев — GOOD]
 Рома жмёт на газ — не тормозит,
 Город за спиной уже гудит.
 Кто не верил — пусть стоит в тени,
@@ -117,10 +149,27 @@ WHY THIS WORKS:
 - "тормозит/гудит" — clean rhyme (ит/ит)
 - "тени/беги" — acceptable assonant rhyme
 - Every line has a concrete image or action
+- Hook phrase "жмёт на газ" is catchy and memorable
 - No filler, no meaningless metaphors
 - Simple words, easy to sing
 
-[Бридж]
+[Куплет 2 — GOOD]
+На охоте в пять, роса на сапогах,
+Тут нет понтов, тут важен каждый шаг.
+Потом качалка — гриф ложится в ладонь,
+Он жмёт от груди, в мышцах тихий огонь.
+А вечером девчонки: «Рома, где был весь день?»
+Он только улыбнётся, шапку набок, набекрень.
+
+WHY THIS WORKS:
+- "сапогах/шаг" — clean rhyme (аг/ах — near)
+- "ладонь/огонь" — clean rhyme (онь/онь)
+- "день/набекрень" — clean rhyme (ень/ень)
+- Sensory details: dew on boots, barbell in palm, hat tilted
+- Shows personality through ACTION (smiles, tips hat), not labels
+- Story moves: morning hunt → gym → evening with girls
+
+[Бридж — GOOD]
 А в лесу всё тихо, только он и след,
 Тут не нужен город и чужой совет.
 Ветки под ногой, пар идёт из губ —
@@ -132,6 +181,15 @@ WHY THIS WORKS:
 - Concrete sensory details: branches, breath steam
 - Contrasts city life (verse) with nature (bridge) — story moves
 - All words are simple, 1-2 syllables mostly
+
+[Финал — GOOD]
+Утро снова — Рома крутит руль,
+Тот же двор, тот же маршрут в июль.
+
+WHY THIS WORKS:
+- Echoes the opening (morning routine) — story comes full circle
+- "руль/июль" — clean rhyme
+- Short, punchy, no empty praise — just an image
 
 ═══ ADDITIONAL ═══
 - Include names and personal details from the customer's request.
