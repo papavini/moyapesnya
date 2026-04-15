@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "WebSearch",
+      "WebFetch(domain:replicate.com)",
+      "WebFetch(domain:glazkov.com)",
+      "WebFetch(domain:vc.ru)",
+      "WebFetch(domain:aihabit.net)",
+      "WebFetch(domain:llmarena.ru)",
+      "WebFetch(domain:habr.com)",
+      "WebFetch(domain:dtf.ru)",
+      "WebFetch(domain:ailibri.com)",
+      "WebFetch(domain:arxiv.org)",
+      "WebFetch(domain:discuss.ai.google.dev)",
+      "WebFetch(domain:www.ixbt.com)",
+      "WebFetch(domain:openrouter.ai)"
+    ]
+  }
+}

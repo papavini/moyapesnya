@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"additionalContext\":\"REMINDER (CLAUDE.md): READ CONTINUITY.md first using the Read tool, update it if state changed, then begin your reply with a Ledger Snapshot: Goal + Now/Next + Open Questions.\"}}'",
+            "statusMessage": "Загружаю Continuity Ledger…"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"systemMessage\":\"REMINDER (CLAUDE.md): После завершения задачи — 1) обнови CONTINUITY.md если изменились цель/решения/статус; 2) обнови /docs (architecture.md / structure.md / flow.md / progress.md) если изменилась архитектура, флоу или статус компонентов.\"}'",
+            "statusMessage": "Проверяю Continuity Ledger…"
+          }
+        ]
+      }
+    ]
+  }
+}
