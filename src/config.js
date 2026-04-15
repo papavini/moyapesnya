@@ -26,7 +26,7 @@ export const config = {
   },
   ai: {
     apiKey: process.env.OPENROUTER_API_KEY || '',
-    model: process.env.AI_MODEL || 'google/gemini-2.5-pro',
+    model: process.env.AI_MODEL || 'anthropic/claude-sonnet-4-5',
     baseUrl: process.env.AI_BASE_URL || 'https://openrouter.ai/api/v1',
   },
   robokassa: {
