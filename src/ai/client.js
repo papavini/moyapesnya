@@ -295,7 +295,8 @@ export async function generateLyrics({ occasion, genre, mood, voice, wishes }) {
             { role: 'user', content: userPrompt },
           ],
           max_tokens: 16000,
-          temperature: 0.7,
+          temperature: 1,
+          reasoning: { effort: 'high' },
         }),
       });
       text = await res.text();
