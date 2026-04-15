@@ -128,44 +128,47 @@ VOCABULARY
 - BANNED cliché metaphors: "душа поёт", "сердце плачет", "огонь внутри", "крылья за спиной", "нерв натянут струною"
 
 MEANING
-- SHOW, DON'T TELL: never write "[Name] крутой / сильный / лучший / клад / герой". Show it through specific actions and images.
+- SHOW, DON'T TELL: never write "[Name] крутой / сильный / лучший / клад / герой / наш герой". Never have other characters say it either ("девчонки шепчут: наш герой"). Show it through specific actions and images.
 - Every line must carry concrete meaning on its own. If it sounds absurd in isolation — rewrite.
-- BANNED filler: "скажу вам честно", "и это не предел", "вот такие дела", "знаешь сам", "вот оно, всё", "вот его круг"
+- NONSENSE-FOR-RHYME TEST: after writing each line, ask: "does this describe something real and logical?" If not — rewrite. Examples of nonsense lines that were inserted just to fit a rhyme: "велик стоит в кустах" (why in bushes?), "в кармане новый файл" (what file?), "солнце на кольцо" (meaningless), "лайков полный старт" (word salad). These lines exist only because the author needed a rhyme — this is BANNED.
+- BANNED filler: "скажу вам честно", "и это не предел", "вот такие дела", "знаешь сам", "вот оно, всё", "вот его круг", "жизнь его игра", "и некогда скучать", "и всё горит"
 - BANNED line-end padding: never add random words ("брат", "да", "эй", "тут", "вот") at end of line just for rhyme.
 - Story arc: setup (verse 1) → development (verse 2) → twist (bridge) → resolution (outro).
 
-STRUCTURE
+STRUCTURE — LINE COUNTS ARE STRICT, DO NOT EXCEED THEM
 
 [Куплет 1]
-(5-6 lines)
+EXACTLY 5-6 lines. NOT 7, NOT 8. If you have more — cut the weakest lines.
 
 [Припев]
-(4-5 lines, with a memorable hook phrase)
+EXACTLY 4-5 lines. Must contain a memorable hook phrase.
 
 [Куплет 2]
-(5-6 lines)
+EXACTLY 5-6 lines. NOT 7, NOT 8.
 
 [Припев]
 (repeat word-for-word)
 
 [Бридж]
-(3-4 lines, contrasting mood or rhythm)
+EXACTLY 3-4 lines. Contrasting mood or rhythm.
 
 [Припев]
 (repeat word-for-word)
 
 [Финал]
-(2-3 lines)
+EXACTLY 2-3 lines.
 
 CHECKLIST (run on EVERY line)
 - [ ] Rhyming words actually sound alike? (check last stressed syllable)
 - [ ] Syllable count ±1 of neighboring lines?
 - [ ] Line has concrete meaning without context?
+- [ ] Line describes something real and logical, not nonsense inserted for rhyme?
 - [ ] No filler phrases or line-end padding?
 - [ ] No cliché/verb-only/fake rhymes?
 - [ ] All words are simple and singable?
-- [ ] SHOW not TELL — no empty praise labels?
-If ANY item fails — rewrite that line.
+- [ ] SHOW not TELL — no praise labels, even in dialogue ("девчонки шепчут: герой")?
+- [ ] Verse 1 and 2 have EXACTLY 5-6 lines each? Chorus 4-5? Bridge 3-4? Finale 2-3?
+If ANY item fails — rewrite that line or cut excess lines.
 
 ═══ FEW-SHOT EXAMPLES ═══
 
