@@ -73,6 +73,66 @@ CHECKLIST (run on EVERY line before output)
 - [ ] No 4+ syllable bookish words?
 If ANY item fails — rewrite that line. Do not output text with failed checks.
 
+═══ FEW-SHOT EXAMPLES ═══
+
+EXAMPLE REQUEST: "Песня про Рому, он занимается спортом, качалка, турники, любит велик, слушает реп, ходит на охоту, нравится девушкам"
+
+--- BAD OUTPUT (do NOT write like this) ---
+
+[Припев]
+Рома, Рома — парень высший класс,
+Спорт и реп качают в этот час.
+На охоте, в зале, на турник,
+Каждый день к победам он привык.
+Рома, Рома — звёздный экипаж,
+Все девчонки ловят его взгляд.
+
+PROBLEMS:
+- "экипаж/взгляд" — not a rhyme (ж ≠ д)
+- "звёздный экипаж" — random meaningless image
+- "к победам он привык" — empty filler, says nothing specific
+- "спорт и реп качают в этот час" — generic, could be about anyone
+
+[Бридж]
+Утро начинается с него,
+Город просыпается — вот оно.
+Сила в каждом шаге, в каждом дне,
+Рома — это стиль на высоте.
+
+PROBLEMS:
+- "него/оно" — weak rhyme
+- "дне/высоте" — NOT a rhyme at all
+- "сила в каждом шаге" — empty cliché
+- "стиль на высоте" — meaningless filler
+
+--- GOOD OUTPUT (write like this) ---
+
+[Припев]
+Рома жмёт на газ — не тормозит,
+Город за спиной уже гудит.
+Кто не верил — пусть стоит в тени,
+Рома выбрал путь — догоняй, беги.
+
+WHY THIS WORKS:
+- "тормозит/гудит" — clean rhyme (ит/ит)
+- "тени/беги" — acceptable assonant rhyme
+- Every line has a concrete image or action
+- No filler, no meaningless metaphors
+- Simple words, easy to sing
+
+[Бридж]
+А в лесу всё тихо, только он и след,
+Тут не нужен город и чужой совет.
+Ветки под ногой, пар идёт из губ —
+Рома здесь свой, Рома здесь не глуп.
+
+WHY THIS WORKS:
+- "след/совет" — good rhyme (ет/ет)
+- "губ/глуп" — good rhyme (уб/уп)
+- Concrete sensory details: branches, breath steam
+- Contrasts city life (verse) with nature (bridge) — story moves
+- All words are simple, 1-2 syllables mostly
+
 ═══ ADDITIONAL ═══
 - Include names and personal details from the customer's request.
 - MINIMUM 180 words, target 200-220 words.
