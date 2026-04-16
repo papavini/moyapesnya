@@ -126,9 +126,11 @@ export async function runPipeline({ occasion, genre, mood, voice, wishes }) {
     return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
   }
 
-  // Gate 5: sycophancy guard — require >= 20% new tokens
+  // Gate 5: sycophancy guard — require >= 15% new tokens.
+  // Lowered from 0.20 → 0.15 (2026-04-16): with 2-of-5 KEEP sections, geometric ceiling
+  // for total new-token ratio is ~30%, so 20% rejected legit Sonnet 4.6 rewrites at 19.7%.
   const newTokenRatio = computeNewTokenRatio(draft.lyrics, rewritten.lyrics);
-  if (newTokenRatio < 0.20) {
+  if (newTokenRatio < 0.15) {
     console.log(
       `[pipeline] rewrite rejected (sycophancy: only ${(newTokenRatio * 100).toFixed(1)}% new tokens), using original`
     );
