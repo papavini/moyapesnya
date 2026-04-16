@@ -116,11 +116,11 @@ Credits списываются. Повторная генерация обычн
 - Открытие: P1_ не критичен, cookie — главная аутентификация (тест 13.04)
 
 ## Now
-- AI Poet Pipeline Phase 1 Plan 03: integrate scoreDraft into src/ai/client.js pipeline
+- Phase 1 COMPLETE. All 3 plans done (2aea5c7, 607c612, 90c1715). ROADMAP Phase 1 marked Complete.
 
 ## Next
-- Execute Plan 01-03: wire scoreDraft gate into generateLyrics flow
 - Phase 2: Critic integration (Claude Sonnet 4.6 via OpenRouter)
+- Update ROADMAP for Phase 2 planning
 - Следить за логами бота при реальном использовании
 - Robokassa: включить PAYWALL_ENABLED=true когда готов прайсинг
 

@@ -9,7 +9,7 @@
 
 ## Phases
 
-- [ ] **Phase 1: Programmatic Metrics Gate** - Pure-JS quality detectors that score any draft before touching AI
+- [x] **Phase 1: Programmatic Metrics Gate** - Pure-JS quality detectors that score any draft before touching AI (completed 2026-04-16)
 - [ ] **Phase 2: Critic Integration** - Claude Sonnet 4.6 critic with 5-dimension rubric, fed by Phase 1 metrics
 - [ ] **Phase 3: Rewriter and Full Pipeline** - Gemini 2.5 Flash rewriter + end-to-end G→C→R orchestration with gate logic
 - [ ] **Phase 4: A/B Validation and Threshold Calibration** - Test corpus, blind listening comparison, go/no-go decision
@@ -29,9 +29,9 @@
   4. The gate function returns `{banale_pairs, syllable_violations, lexical_diversity, skip_pipeline}` synchronously with no API calls
 **Plans**: 3 plans
 Plans:
-- [ ] 01-01-PLAN.md — Wave 0: skeleton src/ai/metrics.js + failing test suite (RED state)
-- [ ] 01-02-PLAN.md — Implement banale/syllable/MATTR/gate; flip tests to GREEN
-- [ ] 01-03-PLAN.md — Wire scoreDraft into src/ai/client.js + add npm test scripts
+- [x] 01-01-PLAN.md — Wave 0: skeleton src/ai/metrics.js + failing test suite (RED state)
+- [x] 01-02-PLAN.md — Implement banale/syllable/MATTR/gate; flip tests to GREEN
+- [x] 01-03-PLAN.md — Wire scoreDraft into src/ai/client.js + add npm test scripts
 
 ### Phase 2: Critic Integration
 **Goal**: A draft plus pre-computed metrics can be evaluated by Claude Sonnet 4.6 and returned as a structured JSON critique with section-level verdicts
@@ -76,7 +76,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Programmatic Metrics Gate | 0/3 | Planned | - |
+| 1. Programmatic Metrics Gate | 3/3 | Complete   | 2026-04-16 |
 | 2. Critic Integration | 0/0 | Not started | - |
 | 3. Rewriter and Full Pipeline | 0/0 | Not started | - |
 | 4. A/B Validation and Threshold Calibration | 0/0 | Not started | - |
