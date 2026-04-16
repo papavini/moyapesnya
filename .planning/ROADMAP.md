@@ -10,7 +10,7 @@
 ## Phases
 
 - [x] **Phase 1: Programmatic Metrics Gate** - Pure-JS quality detectors that score any draft before touching AI (completed 2026-04-16)
-- [ ] **Phase 2: Critic Integration** - Claude Sonnet 4.6 critic with 5-dimension rubric, fed by Phase 1 metrics
+- [x] **Phase 2: Critic Integration** - Claude Sonnet 4.6 critic with 5-dimension rubric, fed by Phase 1 metrics (completed 2026-04-16)
 - [ ] **Phase 3: Rewriter and Full Pipeline** - Gemini 2.5 Flash rewriter + end-to-end G→C→R orchestration with gate logic
 - [ ] **Phase 4: A/B Validation and Threshold Calibration** - Test corpus, blind listening comparison, go/no-go decision
 
@@ -47,7 +47,7 @@ Plans:
 Plans:
 - [x] 02-01-PLAN.md — Wave 1: skeleton src/ai/critic.js + RED test contract + config + scripts
 - [x] 02-02-PLAN.md — Wave 2: implement judgeSpecificity + critiqueDraft, flip 6 tests to GREEN
-- [ ] 02-03-PLAN.md — Wave 3: verify suite + manual critique inspection + phase closure
+- [x] 02-03-PLAN.md — Wave 3: verify suite + manual critique inspection + phase closure
 **AI hint**: yes
 
 ### Phase 3: Rewriter and Full Pipeline
@@ -81,6 +81,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Programmatic Metrics Gate | 3/3 | Complete   | 2026-04-16 |
-| 2. Critic Integration | 2/3 | In Progress|  |
+| 2. Critic Integration | 3/3 | Complete   | 2026-04-16 |
 | 3. Rewriter and Full Pipeline | 0/0 | Not started | - |
 | 4. A/B Validation and Threshold Calibration | 0/0 | Not started | - |
