@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: Phase 1 — Programmatic Metrics Gate
-current_plan: Plan 03 — Integrate scoreDraft into client.js pipeline
-status: executing
-last_updated: "2026-04-16T12:20:13.123Z"
+current_phase: Phase 2 — Critic Integration
+current_plan: none — Phase 1 complete, awaiting Phase 2 planning
+status: idle
+last_updated: "2026-04-16T16:00:00Z"
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 3
   completed_plans: 3
-  percent: 100
+  percent: 25
 ---
 
 # State — AI Poet Pipeline
@@ -46,7 +46,7 @@ P1 ░░░░░  P2 ░░░░░  P3 ░░░░░  P4 ░░░░░
 
 | Phase | Status | Plans | Notes |
 |-------|--------|-------|-------|
-| 1. Programmatic Metrics Gate | In progress | 2/3 | Plans 01-02 done, Plan 03 (integration) next |
+| 1. Programmatic Metrics Gate | Complete ✅ | 3/3 | All plans done, VERIFICATION.md: 4/4 SC passed |
 | 2. Critic Integration | Not started | 0/0 | Claude Sonnet 4.6 critic |
 | 3. Rewriter and Full Pipeline | Not started | 0/0 | Gemini 2.5 Flash rewriter + orchestration |
 | 4. A/B Validation and Threshold Calibration | Not started | 0/0 | Human blind listening, go/no-go |
@@ -98,6 +98,6 @@ P1 ░░░░░  P2 ░░░░░  P3 ░░░░░  P4 ░░░░░
 
 ## Session Continuity
 
-**Last updated:** 2026-04-16T14:00:00Z
-**Last completed milestone:** Plan 01-02 complete — full metrics.js implementation, all 9 tests GREEN (commit 607c612)
-**Next action:** Execute Plan 01-03 — integrate scoreDraft into src/ai/client.js pipeline
+**Last updated:** 2026-04-16T16:00:00Z
+**Last completed milestone:** Phase 1 complete — all 3 plans done, 9/9 tests GREEN, 4/4 success criteria verified (commits 2aea5c7, 607c612, 90c1715)
+**Next action:** `/gsd-plan-phase 2` — plan Phase 2 (Critic Integration)
