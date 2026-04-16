@@ -8,7 +8,7 @@ import { critiqueDraft } from './critic.js';
 import { rewriteDraft } from './rewriter.js';
 
 const CRITIQUE_TIMEOUT_MS = 30_000;   // 30s — two API calls (specificity + critique)
-const REWRITE_TIMEOUT_MS = 60_000;    // 60s — thinking mode adds latency
+const REWRITE_TIMEOUT_MS = 90_000;    // 90s — Claude Sonnet 4.6 with extended thinking is slower than Gemini Flash
 const SKIP_GATE_SCORE = 12;           // >= 12/15: fast path, skip rewrite
 
 /**

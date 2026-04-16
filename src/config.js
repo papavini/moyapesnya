@@ -29,7 +29,7 @@ export const config = {
     model: process.env.AI_MODEL || 'anthropic/claude-sonnet-4-5',
     baseUrl: process.env.AI_BASE_URL || 'https://openrouter.ai/api/v1',
     criticModel: process.env.AI_CRITIC_MODEL || 'anthropic/claude-sonnet-4.6',
-    rewriterModel: process.env.AI_REWRITER_MODEL || 'google/gemini-2.5-flash',
+    rewriterModel: process.env.AI_REWRITER_MODEL || 'anthropic/claude-sonnet-4.6',
   },
   robokassa: {
     merchantId: process.env.ROBOKASSA_MERCHANT_ID || '',

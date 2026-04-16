@@ -289,7 +289,20 @@ export async function critiqueDraft(lyrics, metrics) {
       }
 
       const critique = parseCritique(raw);
-      console.log(`[critic] attempt ${attempt}: ok total=${critique.total} keep=${critique.keep_sections.length}`);
+      // Compact dim line: ss=N ci=N rq=N si=N eh=N
+      const dimLine = DIMS.map(d => {
+        const short = d.split('_').map(p => p[0]).join('');
+        return `${short}=${critique[d].score}`;
+      }).join(' ');
+      console.log(`[critic] attempt ${attempt}: ok total=${critique.total} dims: ${dimLine}`);
+      console.log(`[critic] keep_sections: ${JSON.stringify(critique.keep_sections)}`);
+      // Show rewrite_instructions for weak dims (score<=1) — first 200 chars each
+      for (const d of DIMS) {
+        if (critique[d].score <= 1) {
+          const ri = critique[d].rewrite_instructions || '';
+          console.log(`[critic] weak ${d} (${critique[d].score}): ${ri.substring(0, 200)}${ri.length > 200 ? '…' : ''}`);
+        }
+      }
       return critique;
     } catch (e) {
       lastError = e;

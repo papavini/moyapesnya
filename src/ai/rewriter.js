@@ -113,9 +113,10 @@ export async function rewriteDraft(lyrics, critique) {
       { role: 'user', content: buildRewriterUserMessage(lyrics, critique) },
     ],
     max_tokens: 16000,
-    temperature: 0.9,
+    // Claude with extended thinking REQUIRES temperature=1.0; Gemini Flash also tolerates it.
+    temperature: 1.0,
     reasoning: { max_tokens: 8000 },
-    // response_format: omit — incompatible with reasoning ON for Gemini via OpenRouter
+    // response_format: omit — incompatible with reasoning ON for Gemini and Claude via OpenRouter
   };
 
   for (let attempt = 1; attempt <= 2; attempt++) {
