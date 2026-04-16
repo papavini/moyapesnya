@@ -114,6 +114,30 @@ function buildCriticUserMessage(lyrics, metrics, specificity, portrait) {
       '```',
       ''
     );
+
+    // GROUNDING CHECK — deterministic enforcement of subject_category_nouns.
+    // If the lyrics contain NONE of these nouns (case-insensitive), the listener
+    // cannot identify the subject's category — that's a story_specificity failure
+    // regardless of how rich the wordplay or scenes are. We pre-compute the answer
+    // here and tell the critic the exact verdict so it can't waffle.
+    const categoryNouns = Array.isArray(portrait.subject_category_nouns)
+      ? portrait.subject_category_nouns.filter(n => typeof n === 'string' && n.trim().length)
+      : [];
+    if (categoryNouns.length) {
+      const lyricsLower = lyrics.toLowerCase();
+      const present = categoryNouns.filter(n => lyricsLower.includes(n.toLowerCase()));
+      const missing = categoryNouns.filter(n => !lyricsLower.includes(n.toLowerCase()));
+      sections.push(
+        '## GROUNDING CHECK (pre-computed — DO NOT contradict):',
+        `Subject category nouns from portrait: ${categoryNouns.map(n => `«${n}»`).join(', ')}`,
+        `Found in draft: ${present.length ? present.map(n => `«${n}»`).join(', ') : '(NONE)'}`,
+        `Missing: ${missing.length ? missing.map(n => `«${n}»`).join(', ') : '(none missing)'}`,
+        present.length === 0
+          ? 'VERDICT: GROUNDING FAIL — the listener cannot identify the subject\'s category. You MUST set story_specificity.score = 0 and write rewrite_instructions that REQUIRE inserting at least one of the missing nouns into [Куплет 1].'
+          : 'VERDICT: GROUNDING OK — at least one category noun appears in the draft. Score story_specificity normally on the other criteria.',
+        ''
+      );
+    }
   }
 
   sections.push(

@@ -255,11 +255,34 @@ English only, comma-separated, 5-10 tags.
  * @returns {string}
  */
 function formatPortraitBlock(portrait) {
+  const categoryNouns = Array.isArray(portrait.subject_category_nouns)
+    ? portrait.subject_category_nouns.filter(n => typeof n === 'string' && n.trim().length)
+    : [];
+
   const lines = [
     '## SUBJECT PORTRAIT (use this as the PRIMARY creative foundation — the wishes below are the raw source, but THIS is who you are writing about):',
     '',
     `CORE IDENTITY: ${portrait.core_identity}`,
     '',
+  ];
+
+  // GROUND THE LISTENER — the #1 rule. Listener must hear AT LEAST ONE category noun
+  // in the FIRST verse, or they won't know what the song is about. This was the bug in
+  // iteration 8: perfect wordplay, zero grounding — listener couldn't tell dog from horse.
+  if (categoryNouns.length) {
+    lines.push(
+      '══ MUST-MENTION WORDS (CRITICAL — GROUND THE LISTENER) ══',
+      `The listener must be able to tell WHAT the subject is within the first 4 lines of [Куплет 1].`,
+      `Use AT LEAST ONE of these exact Russian nouns somewhere in the song (preferably in the first verse):`,
+      `  ${categoryNouns.map(n => `«${n}»`).join(', ')}`,
+      `These are NOT clichés — these are the bare nouns that name the subject's category.`,
+      `Without them, the song becomes a riddle: "is this about a horse? a man? a dog?".`,
+      `Wordplay and metaphor go ON TOP of grounding, NEVER INSTEAD of it.`,
+      ''
+    );
+  }
+
+  lines.push(
     'UNIQUE QUIRKS (specific habits — weave these into verses, do not just list them):',
     ...portrait.unique_quirks.map(q => `  • ${q}`),
     '',
@@ -268,8 +291,8 @@ function formatPortraitBlock(portrait) {
     'SCENES TO USE (build verses around these visual moments):',
     ...portrait.scenes_to_use.map((s, i) => `  ${i + 1}. ${s}`),
     '',
-    `TONAL REGISTER: ${portrait.tonal_register} — match this energy throughout.`,
-  ];
+    `TONAL REGISTER: ${portrait.tonal_register} — match this energy throughout.`
+  );
 
   if (portrait.wordplay_opportunity) {
     lines.push('', `WORDPLAY OPPORTUNITY: ${portrait.wordplay_opportunity}`);
@@ -278,8 +301,18 @@ function formatPortraitBlock(portrait) {
   if (Array.isArray(portrait.phrases_to_AVOID) && portrait.phrases_to_AVOID.length) {
     lines.push(
       '',
-      'PHRASES TO AVOID (these would kill the song — do not use them or anything close):',
-      ...portrait.phrases_to_AVOID.map(p => `  ✗ ${p}`)
+      'PHRASES TO AVOID — these are FULL MULTI-WORD CLICHÉS to avoid verbatim, NOT forbidden words.',
+      'You ARE allowed to use any individual word inside these phrases in other contexts.',
+      'e.g., "верный пёс" is banned as a phrase, but "пёс" alone is REQUIRED (see MUST-MENTION above).',
+      ...portrait.phrases_to_AVOID.map(p => `  ✗ «${p}»`)
+    );
+  }
+
+  // Repeat the grounding rule at the bottom — anti-drift guard (same pattern as rewriter prompt).
+  if (categoryNouns.length) {
+    lines.push(
+      '',
+      `══ REPEAT: at least one of ${categoryNouns.map(n => `«${n}»`).join(', ')} MUST appear in the final song, ideally in [Куплет 1]. ══`
     );
   }
 

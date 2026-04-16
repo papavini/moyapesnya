@@ -78,7 +78,8 @@ Credits списываются. Повторная генерация обычн
 - **Деплой:** commit 5ebf501 на сервере + .env AI_MODEL переключён в live
 - **Cookie:** свежая (обновлена 14.04 08:51)
 - **AI Poet Pipeline:** Phase 1 ✅, Phase 2 ✅, Phase 3 ✅. Live tuning в процессе: metrics fast path отключён (5ebf501), sycophancy threshold 15% (d48e009), rewriter Sonnet 4.6 temp=1.0 (34f4f27), verbose critic logging.
-- **Phase 4 U-step (in progress):** src/ai/analyzer.js → understandSubject() возвращает портрет JSON (core_identity, unique_quirks, scenes, tonal_register, phrases_to_AVOID). Pipeline: U → G → C → R, портрет передаётся всем downstream. Graceful degradation если portrait=null. npm run check ✅. Готово к коммиту/деплою.
+- **Phase 4 U-step DEPLOYED (commit d967c5d):** src/ai/analyzer.js → understandSubject() возвращает портрет JSON (7 полей, валидация по shape). Pipeline: U → G → C → R, портрет передаётся всем downstream. Graceful degradation если portrait=null. Smoke test: 16.2s, портрет валиден.
+- **Grounding fix (in progress):** живой тест показал — Phase 4 не называет КАТЕГОРИЮ субъекта (нет «пёс», «собака», «лабрадор»), слушатель не понимает о ком песня. Причина: `phrases_to_AVOID` содержал «верный пёс» → генератор перестраховался и выкинул слово «пёс» совсем. Фикс: новое поле `subject_category_nouns` в портрете (1+ существительных), 3-уровневое enforcement (генератор → критик → rewriter), защитный фильтр в analyzer удаляет bare-noun из phrases_to_AVOID. Pipeline логирует grounding ok/MISS на draft и rewritten этапах.
 
 ## Done (2026-04-16)
 - **Live tuning после Phase 3 deploy** (наблюдение за реальными заказами):

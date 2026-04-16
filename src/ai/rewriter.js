@@ -97,6 +97,25 @@ function buildRewriterUserMessage(lyrics, critique, portrait) {
       '```',
       ''
     );
+
+    // GROUNDING — same enforcement as in critic.js. If the draft missed category nouns,
+    // the rewrite MUST add at least one. This is the hard guarantee that prevents
+    // "perfect wordplay, listener can't tell what species" failures.
+    const categoryNouns = Array.isArray(portrait.subject_category_nouns)
+      ? portrait.subject_category_nouns.filter(n => typeof n === 'string' && n.trim().length)
+      : [];
+    if (categoryNouns.length) {
+      const lyricsLower = lyrics.toLowerCase();
+      const missingAll = !categoryNouns.some(n => lyricsLower.includes(n.toLowerCase()));
+      sections.push(
+        '## ОБЯЗАТЕЛЬНЫЕ СЛОВА (заземляют слушателя — без них непонятно про КОГО песня):',
+        `В финальном тексте ОБЯЗАТЕЛЬНО должно прозвучать ХОТЯ БЫ ОДНО из: ${categoryNouns.map(n => `«${n}»`).join(', ')}`,
+        missingAll
+          ? '⚠️ В оригинальном черновике НИ ОДНО из этих слов НЕ встречается — это критическая ошибка заземления. Обязательно вставь одно из них в [Куплет 1] при переписи. Это НЕ нарушение KEEP — это исправление пропущенного.'
+          : 'В черновике уже есть нужное слово — сохрани его при переписи.',
+        ''
+      );
+    }
   }
 
   sections.push(

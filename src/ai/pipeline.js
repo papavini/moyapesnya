@@ -100,6 +100,9 @@ export async function runPipeline({ occasion, genre, mood, voice, wishes }) {
   const draft = await generateLyrics({ occasion, genre, mood, voice, wishes, portrait });
   // draft = {lyrics, tags, title, metrics} — tags and title always come from here
 
+  // Grounding visibility: did the generator actually use a subject_category_noun?
+  logGroundingCheck(draft.lyrics, portrait, 'draft');
+
   // Gate 1: Phase 1 metrics skip gate
   if (draft.metrics?.skip_pipeline) {
     console.log('[pipeline] metrics gate: skip_pipeline=true — fast path');
@@ -162,5 +165,29 @@ export async function runPipeline({ occasion, genre, mood, voice, wishes }) {
   }
 
   console.log(`[pipeline] rewrite accepted: ${(newTokenRatio * 100).toFixed(1)}% new tokens`);
+  // Grounding post-check — visibility only. If we still ship lyrics without any
+  // subject_category_noun, we want that screaming in the logs so we can catch it.
+  logGroundingCheck(rewritten.lyrics, portrait, 'rewritten');
   return { lyrics: rewritten.lyrics, tags: draft.tags, title: draft.title };
+}
+
+/**
+ * Post-flight check: did the final lyrics actually include any subject_category_noun?
+ * Pure logging — does not alter behaviour. If portrait is null or has no nouns, no-op.
+ * @param {string} lyrics
+ * @param {object|null} portrait
+ * @param {string} stage — label for the log line
+ */
+function logGroundingCheck(lyrics, portrait, stage) {
+  const nouns = Array.isArray(portrait?.subject_category_nouns)
+    ? portrait.subject_category_nouns.filter(n => typeof n === 'string' && n.trim().length)
+    : [];
+  if (!nouns.length) return;
+  const lower = lyrics.toLowerCase();
+  const present = nouns.filter(n => lower.includes(n.toLowerCase()));
+  if (present.length) {
+    console.log(`[pipeline] grounding ok (${stage}): present ${present.map(n => `«${n}»`).join(', ')}`);
+  } else {
+    console.log(`[pipeline] ⚠ grounding MISS (${stage}): none of ${nouns.map(n => `«${n}»`).join(', ')} appear in lyrics`);
+  }
 }

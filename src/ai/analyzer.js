@@ -27,18 +27,28 @@ Your job — extract these fields (ALL in Russian, except tonal_register which i
 2. "unique_quirks" — 2-4 SPECIFIC, observable habits/behaviors that make THIS subject recognizable among all others of the same category. NOT generic ("любит хозяина"). Concrete actions ("кладёт лапу на колено после еды", "ныряет в каждую лужу с разбегу").
    - If WISHES is vague about quirks, INFER 2-3 plausible ones from occasion + subject type. Don't say "unknown".
 
-3. "emotional_dynamic" — 1-2 sentences about HOW the person ordering the song relates to the subject. Love? Admiration? Forgiveness? Pride? Longing? Guilt?
+3. "subject_category_nouns" — 2-4 concrete Russian nouns that NAME WHAT THE SUBJECT IS. The listener must hear at least one of these to understand the subject's CATEGORY (dog vs man vs mother vs friend). Body parts and species words are PERFECT here.
+   - For a dog: ["пёс", "лабрадор", "хвост", "лапа"]
+   - For a husband: ["муж", "мужчина"]
+   - For a mother: ["мама", "мать"]
+   - For a friend: ["друг", "приятель", "товарищ"]
+   - For a child: ["сын"/"дочь", "ребёнок"]
+   - These are NOT clichés — these are the BARE NOUNS the song needs so the listener doesn't think "is this about a horse? a child? a man?".
 
-4. "scenes_to_use" — exactly 3 visually concrete scenes the songwriter can build verses around. Each scene = setting + action + detail. NOT a general concept.
+4. "emotional_dynamic" — 1-2 sentences about HOW the person ordering the song relates to the subject. Love? Admiration? Forgiveness? Pride? Longing? Guilt?
+
+5. "scenes_to_use" — exactly 3 visually concrete scenes the songwriter can build verses around. Each scene = setting + action + detail. NOT a general concept.
    - Bad: "прогулка с хозяином"
    - Good: "утренний рывок к двери, когда хозяин ещё в тапочках"
 
-5. "tonal_register" — exactly one of (English enum):
+6. "tonal_register" — exactly one of (English enum):
    "tender" | "playful" | "triumphant" | "bittersweet" | "reverent" | "cheeky"
 
-6. "wordplay_opportunity" — if the subject's NAME, history, or role has a play-on-words angle (e.g., имя "Зевс" отсылает к громовержцу — контраст с нежным щенком), capture it in one sentence. If nothing obvious — null.
+7. "wordplay_opportunity" — if the subject's NAME, history, or role has a play-on-words angle (e.g., имя "Зевс" отсылает к громовержцу — контраст с нежным щенком), capture it in one sentence. If nothing obvious — null.
 
-7. "phrases_to_AVOID" — 3-5 generic labels/clichés that would make the song dead. Must be category-specific to this subject. Generic examples to always avoid: "лучший на свете", "самый добрый", "верный друг", "наш герой", "сердце поёт", "счастье навсегда". Add 1-2 more that are specific to this particular song (e.g., for a dog: "верный пёс", "преданный друг"; for a spouse: "моя половинка").
+8. "phrases_to_AVOID" — 3-5 generic CLICHÉ PHRASES (multi-word expressions, NEVER bare single nouns) that would make the song dead. CRITICAL: each entry must be 2+ words. NEVER list a bare category noun like "пёс" or "муж" alone — that would forbid the song from naming the subject. List the FULL cliché: "верный пёс" (not "пёс"), "моя половинка" (not "муж"), "лучший на свете" (not "лучший").
+   - Generic examples to always avoid: "лучший на свете", "самый добрый", "верный друг", "наш герой", "сердце поёт", "счастье навсегда".
+   - Category-specific: for a dog "верный пёс", "преданный друг"; for a spouse "моя половинка"; for a mom "мама-солнышко".
 
 CRITICAL RULES:
 - If WISHES is vague, MAKE REASONABLE INFERENCES based on occasion + subject type. The songwriter needs hooks, even if the user didn't give many.
@@ -52,11 +62,12 @@ OUTPUT: single JSON object, no markdown, no \`\`\`. Strictly this shape:
 {
   "core_identity": "<одно предложение на русском>",
   "unique_quirks": ["<русская фраза>", "<русская фраза>", ...],
+  "subject_category_nouns": ["<существительное>", "<существительное>", ...],
   "emotional_dynamic": "<1-2 предложения на русском>",
   "scenes_to_use": ["<сцена 1>", "<сцена 2>", "<сцена 3>"],
   "tonal_register": "<one english enum value>",
   "wordplay_opportunity": "<одно предложение на русском OR null>",
-  "phrases_to_AVOID": ["<русская фраза>", ...]
+  "phrases_to_AVOID": ["<многословная фраза-клише>", "<многословная фраза-клише>", ...]
 }`;
 
 const TONAL_REGISTERS = new Set(['tender', 'playful', 'triumphant', 'bittersweet', 'reverent', 'cheeky']);
@@ -87,6 +98,16 @@ function parsePortrait(raw) {
   if (!Array.isArray(obj.unique_quirks) || obj.unique_quirks.length < 2) {
     throw new Error(`[analyzer] unique_quirks must have >= 2 entries, got: ${JSON.stringify(obj.unique_quirks)}`);
   }
+  if (!Array.isArray(obj.subject_category_nouns) || obj.subject_category_nouns.length < 1) {
+    throw new Error(`[analyzer] subject_category_nouns must have >= 1 entry, got: ${JSON.stringify(obj.subject_category_nouns)}`);
+  }
+  // Each category noun must be a non-empty single token (no spaces) — defensive guard
+  // against the model returning multi-word phrases here.
+  for (const n of obj.subject_category_nouns) {
+    if (typeof n !== 'string' || n.trim().length === 0) {
+      throw new Error(`[analyzer] subject_category_nouns contains non-string or empty: ${JSON.stringify(n)}`);
+    }
+  }
   if (typeof obj.emotional_dynamic !== 'string' || obj.emotional_dynamic.trim().length === 0) {
     throw new Error('[analyzer] emotional_dynamic missing or empty');
   }
@@ -103,6 +124,21 @@ function parsePortrait(raw) {
   if (!Array.isArray(obj.phrases_to_AVOID) || obj.phrases_to_AVOID.length < 2) {
     throw new Error(`[analyzer] phrases_to_AVOID must have >= 2 entries`);
   }
+  // Defensive: drop any bare single-word entries — they would forbid the song from
+  // naming the subject's category (e.g., a bare "пёс" in avoid-list made the generator
+  // refuse to ever say "пёс", losing subject category for the listener).
+  // Also drop any entry that is exactly one of subject_category_nouns.
+  const categorySet = new Set(obj.subject_category_nouns.map(n => n.toLowerCase().trim()));
+  obj.phrases_to_AVOID = obj.phrases_to_AVOID.filter(p => {
+    if (typeof p !== 'string') return false;
+    const trimmed = p.trim();
+    if (trimmed.length === 0) return false;
+    // Drop bare single-word entries (no spaces)
+    if (!trimmed.includes(' ')) return false;
+    // Drop entries that exactly match a category noun
+    if (categorySet.has(trimmed.toLowerCase())) return false;
+    return true;
+  });
 
   return obj;
 }
