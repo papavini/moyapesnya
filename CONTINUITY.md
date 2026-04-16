@@ -82,6 +82,7 @@ Credits списываются. Повторная генерация обычн
 - AI Poet Pipeline: roadmap создан (.planning/ROADMAP.md, 4 фазы, 13/13 coverage)
 - AI Poet Pipeline: STATE.md инициализирован
 - Phase 1 research: .planning/phases/01-programmatic-metrics-gate/01-RESEARCH.md создан
+- **Plan 01-01 DONE:** src/ai/metrics.js skeleton + src/ai/metrics.test.js (9 cases, 4 describe blocks, RED state confirmed, commit 2aea5c7)
 
 ## Done (2026-04-14)
 - Анализ логов: cookie-refresh.sh (таймер) использовал порт 9222 (бот) вместо 9223 (RDP) → каждые 25 мин записывал плохую cookie и рестартовал suno-api прямо во время polling
@@ -114,10 +115,11 @@ Credits списываются. Повторная генерация обычн
 - Открытие: P1_ не критичен, cookie — главная аутентификация (тест 13.04)
 
 ## Now
-- AI Poet Pipeline Phase 1: planning (research done, planner consumes 01-RESEARCH.md)
+- AI Poet Pipeline Phase 1 Plan 02: implement scoreDraft algorithms (GREEN state TDD)
 
 ## Next
-- `/gsd-plan-phase 1` — создать PLAN.md для Phase 1
+- Execute Plan 01-02: METRICS-01 banale cluster lookup, METRICS-02 chorus syllable check, METRICS-04 MATTR-approx, gate logic
+- Execute Plan 01-03: integrate scoreDraft into src/ai/client.js pipeline
 - Следить за логами бота при реальном использовании
 - Robokassa: включить PAYWALL_ENABLED=true когда готов прайсинг
 

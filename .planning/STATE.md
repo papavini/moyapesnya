@@ -1,3 +1,19 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+current_phase: Phase 1 — Programmatic Metrics Gate
+current_plan: Plan 02 — Implement Metrics Algorithms (GREEN)
+status: executing
+last_updated: "2026-04-16T12:12:29Z"
+progress:
+  total_phases: 4
+  completed_phases: 0
+  total_plans: 3
+  completed_plans: 1
+  percent: 33
+---
+
 # State — AI Poet Pipeline
 
 **Project:** AI Poet Pipeline (Generate → Critique → Rewrite)
@@ -15,9 +31,9 @@
 ## Current Position
 
 **Current phase:** Phase 1 — Programmatic Metrics Gate
-**Current plan:** None (not started)
-**Status:** Not started
-**Progress:** 0/4 phases complete
+**Current plan:** Plan 02 — Implement Metrics Algorithms (GREEN)
+**Status:** Executing
+**Progress:** 0/4 phases complete (Plan 01 of Phase 1 complete)
 
 ```
 [░░░░░░░░░░░░░░░░░░░░] 0%
@@ -30,7 +46,7 @@ P1 ░░░░░  P2 ░░░░░  P3 ░░░░░  P4 ░░░░░
 
 | Phase | Status | Plans | Notes |
 |-------|--------|-------|-------|
-| 1. Programmatic Metrics Gate | Not started | 0/0 | Pure JS, no AI calls |
+| 1. Programmatic Metrics Gate | In progress | 1/3 | Plan 01 done (RED state), Plan 02 next |
 | 2. Critic Integration | Not started | 0/0 | Claude Sonnet 4.6 critic |
 | 3. Rewriter and Full Pipeline | Not started | 0/0 | Gemini 2.5 Flash rewriter + orchestration |
 | 4. A/B Validation and Threshold Calibration | Not started | 0/0 | Human blind listening, go/no-go |
@@ -51,6 +67,7 @@ P1 ░░░░░  P2 ░░░░░  P3 ░░░░░  P4 ░░░░░
 ## Accumulated Context
 
 ### Key decisions
+
 - Build order: Metrics Gate FIRST — provides grounding data for critic and avoids unnecessary API calls on good drafts
 - Generator/Rewriter model: `google/gemini-2.5-flash` with `include_reasoning: true` (thinking mode ON)
 - Critic model: `anthropic/claude-sonnet-4-6` — different provider breaks echo chamber
@@ -60,17 +77,20 @@ P1 ░░░░░  P2 ░░░░░  P3 ░░░░░  P4 ░░░░░
 - Context budget in rewriter: if total context > 4000 tokens, compress critique to bullet points
 
 ### Guardrails
+
 - Max latency: 150s total; return best available draft on timeout
 - Sycophancy guard: rewriter output must differ by >= 20% new tokens from draft
 - Instruction drift guard: repeat all hard constraints at start AND end of rewriter system prompt
 - Echo chamber guard: critic uses different provider (Anthropic) from generator (Google)
 
 ### Open questions
+
 - Exact OpenRouter parameter for Gemini 2.5 Flash thinking mode (likely `include_reasoning: true` — verify before Phase 3)
 - Exact OpenRouter model ID for Claude Sonnet 4.6 (`anthropic/claude-sonnet-4-6` — verify against openrouter.ai)
 - Whether METRICS-03 (LLM specificity judge) should be a separate API call or folded into the critic prompt
 
 ### Todos
+
 - Create `.planning/testcases/` directory with 10-15 real past requests before Phase 4
 - Verify OpenRouter model IDs before Phase 3 implementation
 
@@ -78,6 +98,6 @@ P1 ░░░░░  P2 ░░░░░  P3 ░░░░░  P4 ░░░░░
 
 ## Session Continuity
 
-**Last updated:** 2026-04-16 (roadmap initialized)
-**Last completed milestone:** Roadmap written
-**Next action:** Run `/gsd-plan-phase 1` to plan Phase 1 (Programmatic Metrics Gate)
+**Last updated:** 2026-04-16T12:12:29Z
+**Last completed milestone:** Plan 01-01 complete — metrics.js skeleton + failing test suite (RED state TDD, commit 2aea5c7)
+**Next action:** Execute Plan 01-02 — implement scoreDraft algorithms to flip tests GREEN (METRICS-01 banale, METRICS-02 syllables, METRICS-04 MATTR)
