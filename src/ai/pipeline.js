@@ -76,10 +76,14 @@ export async function runPipeline({ occasion, genre, mood, voice, wishes }) {
   const draft = await generateLyrics({ occasion, genre, mood, voice, wishes });
   // draft = {lyrics, tags, title, metrics} — tags and title always come from here
 
-  // Gate 1: Phase 1 metrics skip gate
+  // Gate 1: Phase 1 metrics skip gate — DISABLED 2026-04-16.
+  // Real-world finding: metrics module catches only 37 banale rhyme pairs and syllable
+  // violations. It misses phrasal clichés ("лучший на свете", "сердце поёт"), epithet
+  // pathos ("Великий Зевс"), AAAA monorhyme in chorus, and rhyme failures (гремят/взгляд).
+  // The LLM critic catches all of these — so always run the full pipeline.
+  // Keep diagnostic log so we can see what metrics WOULD have said.
   if (draft.metrics?.skip_pipeline) {
-    console.log('[pipeline] metrics gate: skip_pipeline=true — fast path');
-    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
+    console.log('[pipeline] metrics suggested skip — DISABLED, running full critic anyway');
   }
 
   // Step C: critique with timeout
