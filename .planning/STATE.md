@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 02
-current_plan: 2
-status: executing
-last_updated: "2026-04-16T13:31:11.617Z"
+current_phase: 03
+current_plan: 0
+status: ready
+last_updated: "2026-04-16T14:00:00.000Z"
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 6
   completed_plans: 6
-  percent: 100
+  percent: 50
 ---
 
 # State — AI Poet Pipeline
@@ -24,22 +24,21 @@ progress:
 ## Project Reference
 
 **Core value:** When a person hears their song they recognize themselves — laughs, cries, wants to send it to a friend.
-**Current focus:** Phase 02 — Critic Integration
+**Current focus:** Phase 03 — Rewriter and Full Pipeline
 
 ---
 
 ## Current Position
 
-Phase: 02 (Critic Integration) — EXECUTING
-Plan: 3 of 3
-**Current phase:** 02
-**Current plan:** 2
-**Status:** Ready to execute
-**Progress:** [██████████] 100%
+Phase: 03 (Rewriter and Full Pipeline) — NOT STARTED
+**Current phase:** 03
+**Current plan:** none — Phase 2 complete, awaiting Phase 3 planning
+**Status:** Ready for Phase 3
+**Progress:** [██████████░░░░░░░░░░] 50%
 
 ```
-[░░░░░░░░░░░░░░░░░░░░] 0%
-P1 ░░░░░  P2 ░░░░░  P3 ░░░░░  P4 ░░░░░
+[██████████░░░░░░░░░░] 50%
+P1 █████  P2 █████  P3 ░░░░░  P4 ░░░░░
 ```
 
 ---
@@ -49,7 +48,7 @@ P1 ░░░░░  P2 ░░░░░  P3 ░░░░░  P4 ░░░░░
 | Phase | Status | Plans | Notes |
 |-------|--------|-------|-------|
 | 1. Programmatic Metrics Gate | Complete ✅ | 3/3 | All plans done, VERIFICATION.md: 4/4 SC passed |
-| 2. Critic Integration | In progress 🔄 | 2/3 | Plan 02 done — full implementation, 6/6 critic tests GREEN (58c7505) |
+| 2. Critic Integration | Complete ✅ | 3/3 | 6/6 critic tests GREEN, 5/5 SC met, manual inspection approved — Phase 2 complete 2026-04-16 |
 | 3. Rewriter and Full Pipeline | Not started | 0/0 | Gemini 2.5 Flash rewriter + orchestration |
 | 4. A/B Validation and Threshold Calibration | Not started | 0/0 | Human blind listening, go/no-go |
 
@@ -81,6 +80,7 @@ P1 ░░░░░  P2 ░░░░░  P3 ░░░░░  P4 ░░░░░
 - No pipeline loops — single G→C→R pass only (Self-Refine paper: 80% of gains land in first pass)
 - Hard constraints (JSON format, syllable limits) must appear at TOP and BOTTOM of rewriter prompt
 - Context budget in rewriter: if total context > 4000 tokens, compress critique to bullet points
+- Phase 2 complete: manual critique inspection variance=0, all 5 SC met, 15/15 tests GREEN
 
 ### Guardrails
 
@@ -92,7 +92,7 @@ P1 ░░░░░  P2 ░░░░░  P3 ░░░░░  P4 ░░░░░
 ### Open questions
 
 - Exact OpenRouter parameter for Gemini 2.5 Flash thinking mode (likely `include_reasoning: true` — verify before Phase 3)
-- Exact OpenRouter model ID for Claude Sonnet 4.6 (`anthropic/claude-sonnet-4-6` — verify against openrouter.ai)
+- Exact OpenRouter model ID for Gemini 2.5 Flash (verify against openrouter.ai before Phase 3)
 - Whether METRICS-03 (LLM specificity judge) should be a separate API call or folded into the critic prompt
 
 ### Todos
@@ -104,6 +104,6 @@ P1 ░░░░░  P2 ░░░░░  P3 ░░░░░  P4 ░░░░░
 
 ## Session Continuity
 
-**Last updated:** 2026-04-16T13:30:11Z
-**Last completed milestone:** Phase 2 Plan 02 complete — judgeSpecificity + critiqueDraft full implementation, 6/6 critic tests GREEN, 9/9 metrics tests still GREEN (commit 58c7505)
-**Next action:** Execute 02-03-PLAN.md — integration sweep + npm wiring verification
+**Last updated:** 2026-04-16T14:00:00Z
+**Last completed milestone:** Phase 2 complete — 6/6 critic tests GREEN, 5/5 SC met, manual inspection approved, variance=0 (commit 58c7505)
+**Next action:** `/gsd-plan-phase 3` — Rewriter and Full Pipeline
