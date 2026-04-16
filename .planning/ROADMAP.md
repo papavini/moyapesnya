@@ -27,7 +27,11 @@
   2. A chorus line exceeding 12 syllables is flagged in `syllable_violations` with the line text and count
   3. A short repetitive draft scores below 0.60 on the MATTR-approx metric; a varied draft scores above
   4. The gate function returns `{banale_pairs, syllable_violations, lexical_diversity, skip_pipeline}` synchronously with no API calls
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 01-01-PLAN.md — Wave 0: skeleton src/ai/metrics.js + failing test suite (RED state)
+- [ ] 01-02-PLAN.md — Implement banale/syllable/MATTR/gate; flip tests to GREEN
+- [ ] 01-03-PLAN.md — Wire scoreDraft into src/ai/client.js + add npm test scripts
 
 ### Phase 2: Critic Integration
 **Goal**: A draft plus pre-computed metrics can be evaluated by Claude Sonnet 4.6 and returned as a structured JSON critique with section-level verdicts
@@ -72,7 +76,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Programmatic Metrics Gate | 0/0 | Not started | - |
+| 1. Programmatic Metrics Gate | 0/3 | Planned | - |
 | 2. Critic Integration | 0/0 | Not started | - |
 | 3. Rewriter and Full Pipeline | 0/0 | Not started | - |
 | 4. A/B Validation and Threshold Calibration | 0/0 | Not started | - |
