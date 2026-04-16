@@ -45,8 +45,8 @@ Plans:
   5. A draft passing the Phase 1 gate with no banale pairs and no syllable violations produces a critique `total` >= 12 (skip condition holds)
 **Plans**: 3 plans
 Plans:
-- [ ] 02-01-PLAN.md — Wave 1: skeleton src/ai/critic.js + RED test contract + config + scripts
-- [ ] 02-02-PLAN.md — Wave 2: implement judgeSpecificity + critiqueDraft, flip 6 tests to GREEN
+- [x] 02-01-PLAN.md — Wave 1: skeleton src/ai/critic.js + RED test contract + config + scripts
+- [x] 02-02-PLAN.md — Wave 2: implement judgeSpecificity + critiqueDraft, flip 6 tests to GREEN
 - [ ] 02-03-PLAN.md — Wave 3: verify suite + manual critique inspection + phase closure
 **AI hint**: yes
 
@@ -81,6 +81,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Programmatic Metrics Gate | 3/3 | Complete   | 2026-04-16 |
-| 2. Critic Integration | 0/0 | Not started | - |
+| 2. Critic Integration | 2/3 | In Progress|  |
 | 3. Rewriter and Full Pipeline | 0/0 | Not started | - |
 | 4. A/B Validation and Threshold Calibration | 0/0 | Not started | - |
