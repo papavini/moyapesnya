@@ -248,15 +248,60 @@ English only, comma-separated, 5-10 tags.
 - Tempo if specified → "175 bpm, fast tempo"`;
 
 /**
- * Генерирует текст песни через OpenRouter (Gemini Flash Lite).
- * Возвращает lyrics (русский текст) + tags (английские SUNO дескрипторы).
+ * Builds the SUBJECT PORTRAIT block injected into the user prompt when the analyzer
+ * succeeded. This is the bridge between Step U (analyzer.js) and Step G — the poet
+ * sees a structured character study INSTEAD of having to invent one from raw wishes.
+ * @param {object} portrait — output of understandSubject() from src/ai/analyzer.js
+ * @returns {string}
  */
-export async function generateLyrics({ occasion, genre, mood, voice, wishes }) {
+function formatPortraitBlock(portrait) {
+  const lines = [
+    '## SUBJECT PORTRAIT (use this as the PRIMARY creative foundation — the wishes below are the raw source, but THIS is who you are writing about):',
+    '',
+    `CORE IDENTITY: ${portrait.core_identity}`,
+    '',
+    'UNIQUE QUIRKS (specific habits — weave these into verses, do not just list them):',
+    ...portrait.unique_quirks.map(q => `  • ${q}`),
+    '',
+    `EMOTIONAL DYNAMIC (how the gift-giver relates to the subject): ${portrait.emotional_dynamic}`,
+    '',
+    'SCENES TO USE (build verses around these visual moments):',
+    ...portrait.scenes_to_use.map((s, i) => `  ${i + 1}. ${s}`),
+    '',
+    `TONAL REGISTER: ${portrait.tonal_register} — match this energy throughout.`,
+  ];
+
+  if (portrait.wordplay_opportunity) {
+    lines.push('', `WORDPLAY OPPORTUNITY: ${portrait.wordplay_opportunity}`);
+  }
+
+  if (Array.isArray(portrait.phrases_to_AVOID) && portrait.phrases_to_AVOID.length) {
+    lines.push(
+      '',
+      'PHRASES TO AVOID (these would kill the song — do not use them or anything close):',
+      ...portrait.phrases_to_AVOID.map(p => `  ✗ ${p}`)
+    );
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Генерирует текст песни через OpenRouter.
+ * Возвращает lyrics (русский текст) + tags (английские SUNO дескрипторы).
+ * @param {{occasion: string, genre: string, mood: string, voice: string, wishes: string, portrait?: object|null}} input
+ *   portrait — optional Step U output. When provided, prepended to the user message
+ *   as a structured character study. When null/undefined, falls back to wishes-only behaviour.
+ */
+export async function generateLyrics({ occasion, genre, mood, voice, wishes, portrait = null }) {
   if (!config.ai.apiKey) {
     throw new Error('OPENROUTER_API_KEY не задан');
   }
 
+  const portraitBlock = portrait ? formatPortraitBlock(portrait) + '\n\n' : '';
+
   const userPrompt =
+    portraitBlock +
     `Напиши песню на русском языке.\n` +
     `Повод: ${occasion}\n` +
     `Жанр/стиль: ${genre}\n` +

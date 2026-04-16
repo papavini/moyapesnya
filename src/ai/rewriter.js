@@ -69,21 +69,37 @@ function buildCompressedCritique(critique) {
 }
 
 /**
- * Builds the user message: KEEP list + critique + original draft.
+ * Builds the user message: optional portrait + KEEP list + critique + original draft.
  * Compresses critique to bullets if combined context exceeds 4000 estimated tokens.
  * @param {string} lyrics
  * @param {object} critique
+ * @param {object|null} portrait - optional Step U output (analyzer.js). Anchors the rewrite
+ *   to the same character so it doesn't drift into a generic song while fixing weak sections.
  * @returns {string}
  */
-function buildRewriterUserMessage(lyrics, critique) {
+function buildRewriterUserMessage(lyrics, critique, portrait) {
   const critiqueText = JSON.stringify(critique, null, 2);
-  const totalEstimate = estimateTokenCount(lyrics) + estimateTokenCount(critiqueText);
+  const portraitText = portrait ? JSON.stringify(portrait, null, 2) : '';
+  const totalEstimate =
+    estimateTokenCount(lyrics) + estimateTokenCount(critiqueText) + estimateTokenCount(portraitText);
 
   const critiqueSection = totalEstimate > 4000
     ? buildCompressedCritique(critique)
     : '```json\n' + critiqueText + '\n```';
 
-  return [
+  const sections = [];
+
+  if (portrait) {
+    sections.push(
+      '## ПОРТРЕТ СУБЪЕКТА (сохрани этот характер при переписи — не размывай его в общие фразы):',
+      '```json',
+      portraitText,
+      '```',
+      ''
+    );
+  }
+
+  sections.push(
     '## РАЗДЕЛЫ KEEP (воспроизведи дословно, символ за символом):',
     (critique.keep_sections || []).join(', ') || '(нет)',
     '',
@@ -91,17 +107,21 @@ function buildRewriterUserMessage(lyrics, critique) {
     critiqueSection,
     '',
     '## ОРИГИНАЛЬНЫЙ ЧЕРНОВИК:',
-    lyrics,
-  ].join('\n');
+    lyrics
+  );
+
+  return sections.join('\n');
 }
 
 /**
  * Rewrites lyrics based on a critique from critiqueDraft().
  * @param {string} lyrics - original song draft
  * @param {object} critique - output of critiqueDraft() from src/ai/critic.js
+ * @param {object|null} [portrait] - optional Step U output. When provided, prepended to the
+ *   user message so the rewriter preserves the same character study while fixing weak sections.
  * @returns {Promise<{lyrics: string} | null>}
  */
-export async function rewriteDraft(lyrics, critique) {
+export async function rewriteDraft(lyrics, critique, portrait = null) {
   if (!config.ai.apiKey) {
     throw new Error('OPENROUTER_API_KEY не задан');
   }
@@ -110,7 +130,7 @@ export async function rewriteDraft(lyrics, critique) {
     model: REWRITER_MODEL,
     messages: [
       { role: 'system', content: REWRITER_SYSTEM_PROMPT },
-      { role: 'user', content: buildRewriterUserMessage(lyrics, critique) },
+      { role: 'user', content: buildRewriterUserMessage(lyrics, critique, portrait) },
     ],
     max_tokens: 16000,
     // Claude with extended thinking REQUIRES temperature=1.0; Gemini Flash also tolerates it.

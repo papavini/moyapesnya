@@ -6,7 +6,9 @@
 import { generateLyrics } from './client.js';
 import { critiqueDraft } from './critic.js';
 import { rewriteDraft } from './rewriter.js';
+import { understandSubject } from './analyzer.js';
 
+const ANALYZER_TIMEOUT_MS = 30_000;   // 30s — single Sonnet call, no thinking, structured JSON
 const CRITIQUE_TIMEOUT_MS = 30_000;   // 30s — two API calls (specificity + critique)
 const REWRITE_TIMEOUT_MS = 90_000;    // 90s — Claude Sonnet 4.6 with extended thinking is slower than Gemini Flash
 const SKIP_GATE_SCORE = 12;           // >= 12/15: fast path, skip rewrite
@@ -60,20 +62,42 @@ function computeNewTokenRatio(originalLyrics, rewrittenLyrics) {
 }
 
 /**
- * Full Generate → Critique → Rewrite pipeline.
+ * Full Understand → Generate → Critique → Rewrite pipeline.
  *
+ * Step U:  build subject portrait (analyzer); null on failure → degrades gracefully
  * Gate 1: metrics.skip_pipeline === true  → return immediately (no critique, no rewrite)
  * Gate 2: critiqueDraft returns null      → return original draft (critic failure)
  * Gate 3: critique.total >= 12            → return original draft (fast path)
  * Gate 4: rewriteDraft returns null       → return original draft (rewriter failure)
- * Gate 5: < 20% new tokens               → return original draft (sycophancy guard)
+ * Gate 5: < 15% new tokens                → return original draft (sycophancy guard)
  *
  * @param {{occasion: string, genre: string, mood: string, voice: string, wishes: string}} input
  * @returns {Promise<{lyrics: string, tags: string, title: string}>}
  */
 export async function runPipeline({ occasion, genre, mood, voice, wishes }) {
-  // Step G: generate draft
-  const draft = await generateLyrics({ occasion, genre, mood, voice, wishes });
+  // Step U: understand subject — rich portrait used by all downstream steps.
+  // Non-fatal: on failure or timeout we proceed with portrait=null and the existing
+  // wishes-only behaviour (graceful degradation — pipeline keeps the same contract).
+  let portrait = null;
+  try {
+    portrait = await withTimeout(
+      understandSubject({ occasion, genre, mood, voice, wishes }),
+      ANALYZER_TIMEOUT_MS,
+      'understandSubject'
+    );
+    if (portrait) {
+      console.log(`[pipeline] portrait core_identity: ${portrait.core_identity}`);
+      console.log(`[pipeline] portrait tonal_register: ${portrait.tonal_register}`);
+    } else {
+      console.log('[pipeline] portrait null — degrading to wishes-only generation');
+    }
+  } catch (e) {
+    console.log('[pipeline] analyzer step failed:', e.message, '— proceeding without portrait');
+    portrait = null;
+  }
+
+  // Step G: generate draft (portrait is optional — generator falls back to wishes-only when null)
+  const draft = await generateLyrics({ occasion, genre, mood, voice, wishes, portrait });
   // draft = {lyrics, tags, title, metrics} — tags and title always come from here
 
   // Gate 1: Phase 1 metrics skip gate
@@ -82,11 +106,11 @@ export async function runPipeline({ occasion, genre, mood, voice, wishes }) {
     return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
   }
 
-  // Step C: critique with timeout
+  // Step C: critique with timeout (portrait gives critic a benchmark for story_specificity)
   let critique = null;
   try {
     critique = await withTimeout(
-      critiqueDraft(draft.lyrics, draft.metrics),
+      critiqueDraft(draft.lyrics, draft.metrics, portrait),
       CRITIQUE_TIMEOUT_MS,
       'critiqueDraft'
     );
@@ -107,11 +131,11 @@ export async function runPipeline({ occasion, genre, mood, voice, wishes }) {
     return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
   }
 
-  // Step R: rewrite with timeout
+  // Step R: rewrite with timeout (portrait keeps the rewrite anchored to the same character)
   let rewritten = null;
   try {
     rewritten = await withTimeout(
-      rewriteDraft(draft.lyrics, critique),
+      rewriteDraft(draft.lyrics, critique, portrait),
       REWRITE_TIMEOUT_MS,
       'rewriteDraft'
     );

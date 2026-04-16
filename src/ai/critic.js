@@ -90,10 +90,12 @@ Respond with a SINGLE JSON object matching this exact structure. No markdown, no
 }`;
 
 /**
- * Builds the critic user message: pre-computed metrics block + the song draft.
+ * Builds the critic user message: optional portrait + pre-computed metrics + the song draft.
  * RESEARCH.md Pattern 6 — metrics passed as "GROUNDING FACTS" the critic must not contradict.
+ * When a portrait is provided (Step U output), the critic uses it as the BENCHMARK for
+ * story_specificity and chorus_identity — does the draft actually capture this character?
  */
-function buildCriticUserMessage(lyrics, metrics, specificity) {
+function buildCriticUserMessage(lyrics, metrics, specificity, portrait) {
   const groundingBlock = JSON.stringify({
     banale_pairs: metrics.banale_pairs,
     syllable_violations: (metrics.syllable_violations || []).map(v => v.line),
@@ -102,15 +104,29 @@ function buildCriticUserMessage(lyrics, metrics, specificity) {
     has_time_expressions: specificity.has_time_expressions,
   }, null, 2);
 
-  return [
+  const sections = [];
+
+  if (portrait) {
+    sections.push(
+      '## SUBJECT PORTRAIT (built by analyzer — the draft MUST capture this character; use as benchmark for story_specificity and chorus_identity):',
+      '```json',
+      JSON.stringify(portrait, null, 2),
+      '```',
+      ''
+    );
+  }
+
+  sections.push(
     '## Pre-computed metrics (treat as GROUNDING FACTS — do not contradict these):',
     '```json',
     groundingBlock,
     '```',
     '',
     '## Song draft to evaluate:',
-    lyrics,
-  ].join('\n');
+    lyrics
+  );
+
+  return sections.join('\n');
 }
 
 /**
@@ -230,9 +246,11 @@ export async function judgeSpecificity(lyrics) {
  * Returns a critique JSON object, or null if both retry attempts fail.
  * @param {string} lyrics
  * @param {object} metrics - output of scoreDraft() from src/ai/metrics.js
+ * @param {object|null} [portrait] - optional Step U output from analyzer.js. When provided,
+ *   the critic uses it as the benchmark for story_specificity and chorus_identity.
  * @returns {Promise<null | object>}
  */
-export async function critiqueDraft(lyrics, metrics) {
+export async function critiqueDraft(lyrics, metrics, portrait = null) {
   if (!config.ai.apiKey) {
     throw new Error('OPENROUTER_API_KEY не задан');
   }
@@ -245,7 +263,7 @@ export async function critiqueDraft(lyrics, metrics) {
     console.log('[critic] specificity judge failed, using defaults:', e.message);
   }
 
-  const userMessage = buildCriticUserMessage(lyrics, metrics, specificity);
+  const userMessage = buildCriticUserMessage(lyrics, metrics, specificity, portrait);
 
   const body = {
     model: CRITIC_MODEL,

@@ -71,12 +71,21 @@ Credits списываются. Повторная генерация обычн
 ## State
 - **Бот:** работает ✅, cookie свежая (обновлена вручную 14.04), suno-api авторизован
 - **Credits:** 2040/2500
-- **AI модель:** google/gemini-2.5-pro + reasoning:high via OpenRouter
-- **Деплой:** commit 422797d на сервере
+- **AI модели (после echo-chamber фикса 16.04):**
+  - Генератор: `google/gemini-2.5-pro` (AI_MODEL в .env)
+  - Критик: `anthropic/claude-sonnet-4.6` (config default) — cross-model ✓
+  - Rewriter: `anthropic/claude-sonnet-4.6` (config default, hotfix 34f4f27)
+- **Деплой:** commit 5ebf501 на сервере + .env AI_MODEL переключён в live
 - **Cookie:** свежая (обновлена 14.04 08:51)
-- **AI Poet Pipeline:** Phase 1 ✅, Phase 2 ✅, Phase 3 ✅ — 15/15 automated checks GREEN. Pipeline: generateLyrics→critiqueDraft→rewriteDraft with 5 gates. telegram.js wired to runPipeline(). Commits: 9b06b08→224e8e0→f8c29a8.
+- **AI Poet Pipeline:** Phase 1 ✅, Phase 2 ✅, Phase 3 ✅. Live tuning в процессе: metrics fast path отключён (5ebf501), sycophancy threshold 15% (d48e009), rewriter Sonnet 4.6 temp=1.0 (34f4f27), verbose critic logging.
+- **Phase 4 U-step (in progress):** src/ai/analyzer.js → understandSubject() возвращает портрет JSON (core_identity, unique_quirks, scenes, tonal_register, phrases_to_AVOID). Pipeline: U → G → C → R, портрет передаётся всем downstream. Graceful degradation если portrait=null. npm run check ✅. Готово к коммиту/деплою.
 
 ## Done (2026-04-16)
+- **Live tuning после Phase 3 deploy** (наблюдение за реальными заказами):
+  - 34f4f27: rewriter переключён Gemini Flash → Sonnet 4.6 (Flash копировал оригинал, 1.3% новизны); temp=1.0; timeout 90s; критик логирует все 5 dim'ов + rewrite_instructions для weak
+  - d48e009: sycophancy threshold 20% → 15% (геом. потолок при 2/5 KEEP ≈ 30%, Sonnet давал 19.7% — отвергался впритык)
+  - 5ebf501: metrics fast path ОТКЛЮЧЁН (37 кластеров не ловят фразовые клише «лучший на свете», AAAA-монорим, fake rhymes)
+  - **Echo chamber фикс**: AI_MODEL .env Sonnet 4.6 → google/gemini-2.5-pro. Генератор и критик теперь разные семейства моделей.
 - **Phase 3 COMPLETE:** src/ai/rewriter.js (Gemini 2.5 Flash, thinking mode, KEEP guard), src/ai/pipeline.js (5-gate orchestrator, timeouts, sycophancy guard), telegram.js wired to runPipeline(). 03-VERIFICATION: 15/15 auto checks GREEN. Commits: 9b06b08, 224e8e0, f8c29a8, 0ff40a2.
 - AI Poet Pipeline: исследование завершено (research/SUMMARY.md)
 - AI Poet Pipeline: требования зафиксированы (REQUIREMENTS.md, 13 v1 req)
@@ -119,15 +128,14 @@ Credits списываются. Повторная генерация обычн
 - Открытие: P1_ не критичен, cookie — главная аутентификация (тест 13.04)
 
 ## Now
-- Phase 3 COMPLETE ✅ (commit f8c29a8). All 3 plans done, 15/15 automated checks GREEN.
+- **Phase 4 U-step реализован:** analyzer.js + проброс портрета через pipeline → client → critic → rewriter. Все signatures обратно совместимы (portrait=null по умолчанию). Готов к коммиту и деплою.
 
 ## Next
-- **Deploy Phase 3 to server**: `git push` → `git pull` on server → `sudo systemctl restart podari-bot`
-- **Human verification** (optional, 3 items in 03-VERIFICATION.md):
-  1. Generic wishes → confirm `[pipeline] rewrite accepted: XX% new tokens` in logs
-  2. Specific wishes → confirm `[pipeline] critique total=NN — above threshold, fast path` in logs
-  3. Rewrite result → manually verify KEEP sections reproduced verbatim
-- Phase 4: A/B Validation and Threshold Calibration (10-15 real test cases, blind comparison)
+- Commit → push → deploy → restart бота
+- Следующий живой заказ → смотреть логи: `[pipeline] portrait core_identity: ...` → проверить, что генератор реально использует портрет (узнаваемость > общих фраз)
+- Если портрет помогает — закрепить как новый baseline; включить metrics fast path обратно (если хочется)
+- Если портрет генерирует фигню (например wrong tonal_register) — подкрутить ANALYZER_SYSTEM_PROMPT
+- Если генератор игнорирует портрет — усилить инструкцию в SYSTEM_PROMPT client.js
 - Robokassa: включить PAYWALL_ENABLED=true когда готов прайсинг
 
 ## Open questions
