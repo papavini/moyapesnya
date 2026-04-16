@@ -72,16 +72,23 @@ Credits списываются. Повторная генерация обычн
 - **Бот:** работает ✅, cookie свежая (обновлена вручную 14.04), suno-api авторизован
 - **Credits:** 2040/2500
 - **AI модели (после echo-chamber фикса 16.04):**
+  - **Analyzer (Phase 4):** `anthropic/claude-sonnet-4.6` (re-uses critic model; env override `AI_ANALYZER_MODEL`)
   - Генератор: `google/gemini-2.5-pro` (AI_MODEL в .env)
   - Критик: `anthropic/claude-sonnet-4.6` (config default) — cross-model ✓
   - Rewriter: `anthropic/claude-sonnet-4.6` (config default, hotfix 34f4f27)
-- **Деплой:** commit 5ebf501 на сервере + .env AI_MODEL переключён в live
+- **Деплой:** commits 5ebf501 + d967c5d + 69032b1 на сервере + .env AI_MODEL переключён в live
 - **Cookie:** свежая (обновлена 14.04 08:51)
-- **AI Poet Pipeline:** Phase 1 ✅, Phase 2 ✅, Phase 3 ✅. Live tuning в процессе: metrics fast path отключён (5ebf501), sycophancy threshold 15% (d48e009), rewriter Sonnet 4.6 temp=1.0 (34f4f27), verbose critic logging.
-- **Phase 4 U-step DEPLOYED (commit d967c5d):** src/ai/analyzer.js → understandSubject() возвращает портрет JSON (7 полей, валидация по shape). Pipeline: U → G → C → R, портрет передаётся всем downstream. Graceful degradation если portrait=null. Smoke test: 16.2s, портрет валиден.
-- **Grounding fix (in progress):** живой тест показал — Phase 4 не называет КАТЕГОРИЮ субъекта (нет «пёс», «собака», «лабрадор»), слушатель не понимает о ком песня. Причина: `phrases_to_AVOID` содержал «верный пёс» → генератор перестраховался и выкинул слово «пёс» совсем. Фикс: новое поле `subject_category_nouns` в портрете (1+ существительных), 3-уровневое enforcement (генератор → критик → rewriter), защитный фильтр в analyzer удаляет bare-noun из phrases_to_AVOID. Pipeline логирует grounding ok/MISS на draft и rewritten этапах.
+- **AI Poet Pipeline:** Phase 1 ✅, Phase 2 ✅, Phase 3 ✅, **Phase 4 ✅ (Subject Understanding)**. Все 4 LLM-раунда работают: U → G → C → R. Live tuning: metrics fast path отключён (5ebf501), sycophancy threshold 15% (d48e009), rewriter Sonnet 4.6 temp=1.0 (34f4f27).
+- **Phase 4 COMPLETE (commits d967c5d + 69032b1):** src/ai/analyzer.js → understandSubject() возвращает портрет JSON (8 полей, валидация по shape). Pipeline: U → G → C → R, портрет передаётся всем downstream. Graceful degradation если portrait=null (30s timeout). Live тест после grounding fix подтвердил: «пёс»/«лабрадор»/«хвост» появляются в финальном тексте; logGroundingCheck даёт visibility на draft и rewritten этапах. Документация: `.planning/phases/04-subject-understanding/{04-RESEARCH,04-IMPLEMENTATION,04-VERIFICATION,04-SUMMARY}.md`.
+- **Live результат Зевс v2 (после grounding fix):** «чёрный пёс» в строке 1 [Куплет 1], «лабрадор» в строке 6, рефрен «Зевс на Олимпе? Нет — Зевс у лужи!». 3 конкретные сцены (лужа / голова на коленях / шланг и брызги), wordplay поверх grounding, тон cheeky/playful. Узнаваемость подтверждена. **Остаточный долг (Phase 5 калибровка):** критик Sonnet 4.6 пропустил fake rhymes («всё/по-своему», «глаза/тебя», «всё/кино»); метрические шероховатости («по-своему» как costyль для рифмы), 2× «вот ___» как филлер; [Финал] всего 2 строки — не Phase 4 проблемы, это критик/rewriter не дожимает на rhyme_quality.
 
 ## Done (2026-04-16)
+- **Phase 4 COMPLETE — Subject Understanding (U→G→C→R):**
+  - `d967c5d` feat(ai): add Subject Understanding (U) step before G→C→R pipeline. New `src/ai/analyzer.js` (211 lines) — `understandSubject()` returns 8-field portrait JSON via Sonnet 4.6, 2-attempt retry, 30s budget, returns null on exhaustion (graceful degradation). Pipeline rewired: Step U executes first; portrait threaded as optional 3rd/4th param into `generateLyrics()`/`critiqueDraft()`/`rewriteDraft()`. All signatures backward-compatible via `portrait = null` default.
+  - **Live test failure surfaced grounding gap:** Зевс song delivered with rich Zeus/громовержец wordplay but ZERO occurrences of «пёс»/«собака»/«лабрадор»/«лапа»/«хвост» — listener could not identify subject category. Root cause: analyzer's `phrases_to_AVOID` contained «верный пёс» → generator over-generalized to "don't say пёс anywhere".
+  - `69032b1` fix(ai): ground the listener — force category nouns into lyrics. Added `subject_category_nouns` field (1-4 bare nouns). 3-layer prompt enforcement: generator MUST-MENTION block + critic deterministic GROUNDING VERDICT (computed in JS) + rewriter explicit "это НЕ нарушение KEEP" insertion instruction. Defensive filter in `parsePortrait()` strips bare single-word entries from `phrases_to_AVOID`. Pipeline emits `[pipeline] grounding ok/MISS (draft|rewritten)` log lines.
+  - **Live re-run confirmed fix:** delivered lyrics now contain «пёс»/«лабрадор»/«хвост»; `grounding ok (rewritten)` log line confirmed.
+  - **Documentation:** `.planning/phases/04-subject-understanding/` — 04-RESEARCH.md, 04-IMPLEMENTATION.md, 04-VERIFICATION.md (14/14 truths verified), 04-SUMMARY.md. ROADMAP.md updated (Phase 4 = Subject Understanding; original Phase 4 → Phase 5: A/B Validation). STATE.md → current_phase=5, completed_phases=4.
 - **Live tuning после Phase 3 deploy** (наблюдение за реальными заказами):
   - 34f4f27: rewriter переключён Gemini Flash → Sonnet 4.6 (Flash копировал оригинал, 1.3% новизны); temp=1.0; timeout 90s; критик логирует все 5 dim'ов + rewrite_instructions для weak
   - d48e009: sycophancy threshold 20% → 15% (геом. потолок при 2/5 KEEP ≈ 30%, Sonnet давал 19.7% — отвергался впритык)
@@ -129,14 +136,13 @@ Credits списываются. Повторная генерация обычн
 - Открытие: P1_ не критичен, cookie — главная аутентификация (тест 13.04)
 
 ## Now
-- **Phase 4 U-step реализован:** analyzer.js + проброс портрета через pipeline → client → critic → rewriter. Все signatures обратно совместимы (portrait=null по умолчанию). Готов к коммиту и деплою.
+- **Phase 4 закрыт и задокументирован.** Pipeline U→G→C→R работает в проде, grounding fix подтверждён живым тестом. Готов к Phase 5 (A/B Validation) когда наберём 10-15 реальных кейсов.
 
 ## Next
-- Commit → push → deploy → restart бота
-- Следующий живой заказ → смотреть логи: `[pipeline] portrait core_identity: ...` → проверить, что генератор реально использует портрет (узнаваемость > общих фраз)
-- Если портрет помогает — закрепить как новый baseline; включить metrics fast path обратно (если хочется)
-- Если портрет генерирует фигню (например wrong tonal_register) — подкрутить ANALYZER_SYSTEM_PROMPT
-- Если генератор игнорирует портрет — усилить инструкцию в SYSTEM_PROMPT client.js
+- Мониторить `[pipeline] grounding ok (draft)` rate за следующие 10-20 живых заказов (target >= 70%)
+- Мониторить `[pipeline] grounding MISS (rewritten)` (target near zero) — если выше 0, ужесточить промпт rewriter
+- Phase 5 (`/gsd-plan-phase 5`): собрать 10-15 реальных тест-кейсов в `.planning/testcases/`, прогнать обе версии (старый G→C→R vs новый U→G→C→R), blind listening, go/no-go
+- Если grounding ratio стабильный — рассмотреть включение metrics fast path обратно (сейчас OFF после 5ebf501)
 - Robokassa: включить PAYWALL_ENABLED=true когда готов прайсинг
 
 ## Open questions
@@ -148,15 +154,21 @@ Credits списываются. Повторная генерация обычн
 - ~~METRICS-01 ">=28 clusters"~~ — resolved: 37 clusters deployed
 
 ## Working set
-- `.planning/ROADMAP.md` — 4-phase roadmap, AI Poet Pipeline
-- `.planning/STATE.md` — pipeline project state
-- `.planning/REQUIREMENTS.md` — 13 v1 requirements (METRICS, PIPELINE, MODELS, VALID)
+- `.planning/ROADMAP.md` — **5-phase roadmap** (Phase 4 = Subject Understanding inserted; Phase 5 = A/B Validation)
+- `.planning/STATE.md` — pipeline project state (current_phase=5, completed_phases=4)
+- `.planning/REQUIREMENTS.md` — 13 v1 requirements (METRICS, PIPELINE, MODELS, VALID) + 4 added (UNDERSTAND-01..04)
 - `.planning/phases/01-programmatic-metrics-gate/` — Phase 1 artifacts (research, plans, summaries, VERIFICATION.md)
+- `.planning/phases/02-critic-integration/` — Phase 2 artifacts
+- `.planning/phases/03-rewriter-and-full-pipeline/` — Phase 3 artifacts
+- `.planning/phases/04-subject-understanding/` — Phase 4 artifacts: 04-RESEARCH.md, 04-IMPLEMENTATION.md, 04-VERIFICATION.md, 04-SUMMARY.md
+- `src/ai/analyzer.js` — **NEW (Phase 4):** understandSubject() → 8-field portrait JSON, Sonnet 4.6, 30s timeout, defensive filter
+- `src/ai/pipeline.js` — runPipeline() U→G→C→R, 5 gates + Step U + logGroundingCheck
 - `src/ai/metrics.js` — metrics gate module (scoreDraft, 37 banale clusters, syllable+MATTR)
 - `src/ai/metrics.test.js` — 9 tests, node:test, GREEN
-- `src/ai/critic.js` — critiqueDraft() + judgeSpecificity(), 5-dim rubric, anthropic/claude-sonnet-4.6
+- `src/ai/critic.js` — critiqueDraft(lyrics, metrics, portrait=null), 5-dim rubric, deterministic GROUNDING CHECK
 - `src/ai/critic.test.js` — 6 integration tests, GREEN (requires OPENROUTER_API_KEY)
-- `src/ai/client.js` — generateLyrics() now returns {lyrics, tags, title, metrics}
+- `src/ai/client.js` — generateLyrics({...,portrait=null}) → {lyrics, tags, title, metrics}; formatPortraitBlock with MUST-MENTION
+- `src/ai/rewriter.js` — rewriteDraft(lyrics, critique, portrait=null), KEEP guard, ОБЯЗАТЕЛЬНЫЕ СЛОВА block
 - `src/suno/refresh-cookie.js` — CDP → essential cookies → suno_cookie.txt → restart suno-api
 - `src/suno/refresh-passkey.js` — CDP passkey refresh (60s wait, принимает fills от пользователя)
 - `src/suno/client.js` — SUNO клиент: handleSunoError (500→cookie, 422→token)
