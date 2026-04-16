@@ -59,11 +59,45 @@ If syllable_violations is non-empty, Singability score is automatically penalize
 score should separately evaluate identity quality.
 
 DIMENSION 3: Rhyme Quality (0-3)
-Measures: Are the rhymes fresh? No clichés?
-HIGH: non-obvious rhymes, internal rhymes, varied scheme
-LOW: banale pairs, verb-only rhymes (идёт/поёт), fake rhymes (железо/честно)
-Grounding data: banale_pairs from Phase 1 metrics. If banale_pairs is non-empty, score must be ≤ 1.
-Rhyme Quality rewrite_instructions MUST quote the banale pair(s) found.
+Measures: Are the rhymes real, fresh, and free of clichés?
+
+═══ MANDATORY PROCEDURE — DO NOT SKIP ═══
+Before scoring, enumerate every rhyme pair in the draft (verse couplets + chorus).
+For EACH pair, classify it as TRUE / APPROXIMATE / FAKE / BANALE using these rules:
+
+• TRUE rhyme  — last stressed vowel + everything after MATCHES.
+  Examples: путь/свернуть, разгон/трон, луну/тишину, висок/ок.
+
+• APPROXIMATE rhyme — last stressed vowel matches but tail consonants differ slightly.
+  ACCEPTABLE in pop. Examples: готово/корона, лужи/нужно, кросс/слёз, нашей/Боже.
+
+• FAKE rhyme — last stressed vowels DIFFER (different sound entirely) and/or
+  the words have no common phonetic ending. NOT a rhyme at all.
+  Concrete examples that MUST be caught as FAKE:
+    ✗ «всё / по-своему»     (ё vs у — completely different vowels, no tail match)
+    ✗ «глаза / тебя»        (А stressed vs Я stressed — different vowels)
+    ✗ «всё / кино»          (ё vs о — different vowels)
+    ✗ «железо / честно»     (классический пример fake)
+    ✗ «дом / огонь»         (м vs нь — different consonants, no vowel match)
+    ✗ «небо / время»        (е vs я — different stressed vowels)
+    ✗ «любовь / навсегда»   (вь vs да — totally different endings)
+    ✗ «душа / дорога»       (А vs О — different stressed vowels)
+
+• BANALE rhyme — true/approximate but in the forbidden cliché list.
+  Examples: любовь/кровь, розы/слёзы, ночи/очи, идёт/поёт (verb-only).
+
+═══ SCORING LADDER (apply STRICTLY) ═══
+  3 = ALL pairs TRUE or APPROXIMATE; at least one fresh / non-obvious pair.
+  2 = ALL pairs TRUE or APPROXIMATE; no fresh standouts but no clichés or fakes.
+  1 = EITHER 1 FAKE pair OR 1+ BANALE pair OR mostly verb-only rhymes.
+  0 = 2+ FAKE pairs OR (1 FAKE + 1 BANALE) OR pervasive cliché stacking.
+
+Grounding data: banale_pairs from Phase 1 metrics. If banale_pairs is non-empty,
+score must be ≤ 1 AND rewrite_instructions MUST quote the banale pair(s) found.
+
+If you find any FAKE pair, rewrite_instructions MUST list it in the format
+«<word1> / <word2>» and demand it be replaced with a true rhyme on the same
+stressed vowel.
 
 DIMENSION 4: Singability (0-3)
 Measures: Can each line be sung without awkward mouth gymnastics?
