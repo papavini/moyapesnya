@@ -52,11 +52,18 @@ Generated: 2026-04-16
 
 ## Traceability
 
-| REQ-ID | Phase | Plan |
-|--------|-------|------|
-| METRICS-01, METRICS-02 | Phase 1 | — |
-| METRICS-03, METRICS-04 | Phase 1 | — |
-| PIPELINE-01, PIPELINE-03 | Phase 2 | — |
-| MODELS-01, MODELS-02 | Phase 2 | — |
-| PIPELINE-02, PIPELINE-04 | Phase 3 | — |
-| VALID-01, VALID-02, VALID-03 | Phase 4 | — |
+| REQ-ID | Phase | Status |
+|--------|-------|--------|
+| METRICS-01 | Phase 1 | Pending |
+| METRICS-02 | Phase 1 | Pending |
+| METRICS-04 | Phase 1 | Pending |
+| PIPELINE-03 | Phase 2 | Pending |
+| MODELS-02 | Phase 2 | Pending |
+| METRICS-03 | Phase 2 | Pending |
+| PIPELINE-01 | Phase 3 | Pending |
+| PIPELINE-02 | Phase 3 | Pending |
+| PIPELINE-04 | Phase 3 | Pending |
+| MODELS-01 | Phase 3 | Pending |
+| VALID-01 | Phase 4 | Pending |
+| VALID-02 | Phase 4 | Pending |
+| VALID-03 | Phase 4 | Pending |
