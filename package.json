@@ -8,7 +8,9 @@
     "start": "node src/index.js",
     "start:tg": "node src/index.js --only=telegram",
     "start:vk": "node src/index.js --only=vk",
-    "check": "node --check src/index.js && node --check src/config.js && node --check src/store.js && node --check src/suno/client.js && node --check src/flow/generate.js && node --check src/bots/telegram.js && node --check src/bots/vk.js"
+    "check": "node --check src/index.js && node --check src/config.js && node --check src/store.js && node --check src/suno/client.js && node --check src/flow/generate.js && node --check src/bots/telegram.js && node --check src/bots/vk.js && node --check src/ai/client.js && node --check src/ai/metrics.js",
+    "test": "node --test src/ai/metrics.test.js",
+    "test:metrics": "node --test src/ai/metrics.test.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

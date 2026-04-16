@@ -1,5 +1,6 @@
 // Using Node 22 built-in fetch (not undici — undici fetch fails in Docker)
 import { config } from '../config.js';
+import { scoreDraft } from './metrics.js';
 
 const SYSTEM_PROMPT = `You are a gifted Russian songwriter — not a rhyme machine, but a STORYTELLER who writes songs that make people laugh, cry, and feel seen.
 
@@ -336,7 +337,9 @@ export async function generateLyrics({ occasion, genre, mood, voice, wishes }) {
 
   const title = extractTitle(lyrics, occasion, wishes);
 
-  return { lyrics, tags, title };
+  const metrics = scoreDraft(lyrics);
+  console.log('[ai] metrics:', JSON.stringify(metrics));
+  return { lyrics, tags, title, metrics };
 }
 
 function extractTitle(lyrics, occasion, wishes) {
