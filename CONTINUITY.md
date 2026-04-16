@@ -76,13 +76,21 @@ Credits списываются. Повторная генерация обычн
   - Генератор: `google/gemini-2.5-pro` (AI_MODEL в .env)
   - Критик: `anthropic/claude-sonnet-4.6` (config default) — cross-model ✓
   - Rewriter: `anthropic/claude-sonnet-4.6` (config default, hotfix 34f4f27)
-- **Деплой:** commits 5ebf501 + d967c5d + 69032b1 на сервере + .env AI_MODEL переключён в live
+- **Деплой:** commits 5ebf501 + d967c5d + 69032b1 + d5e8065 + **03a4d63 (rhyme tightening)** на сервере + .env AI_MODEL переключён в live
 - **Cookie:** свежая (обновлена 14.04 08:51)
 - **AI Poet Pipeline:** Phase 1 ✅, Phase 2 ✅, Phase 3 ✅, **Phase 4 ✅ (Subject Understanding)**. Все 4 LLM-раунда работают: U → G → C → R. Live tuning: metrics fast path отключён (5ebf501), sycophancy threshold 15% (d48e009), rewriter Sonnet 4.6 temp=1.0 (34f4f27).
 - **Phase 4 COMPLETE (commits d967c5d + 69032b1):** src/ai/analyzer.js → understandSubject() возвращает портрет JSON (8 полей, валидация по shape). Pipeline: U → G → C → R, портрет передаётся всем downstream. Graceful degradation если portrait=null (30s timeout). Live тест после grounding fix подтвердил: «пёс»/«лабрадор»/«хвост» появляются в финальном тексте; logGroundingCheck даёт visibility на draft и rewritten этапах. Документация: `.planning/phases/04-subject-understanding/{04-RESEARCH,04-IMPLEMENTATION,04-VERIFICATION,04-SUMMARY}.md`.
 - **Live результат Зевс v2 (после grounding fix):** «чёрный пёс» в строке 1 [Куплет 1], «лабрадор» в строке 6, рефрен «Зевс на Олимпе? Нет — Зевс у лужи!». 3 конкретные сцены (лужа / голова на коленях / шланг и брызги), wordplay поверх grounding, тон cheeky/playful. Узнаваемость подтверждена. **Остаточный долг (Phase 5 калибровка):** критик Sonnet 4.6 пропустил fake rhymes («всё/по-своему», «глаза/тебя», «всё/кино»); метрические шероховатости («по-своему» как costyль для рифмы), 2× «вот ___» как филлер; [Финал] всего 2 строки — не Phase 4 проблемы, это критик/rewriter не дожимает на rhyme_quality.
 
 ## Done (2026-04-16)
+- **Critic rhyme_quality ужесточён (commit 03a4d63):** переписана DIMENSION 3 в `CRITIC_SYSTEM_PROMPT`. Добавлено:
+  - MANDATORY процедура: критик ОБЯЗАН перечислить каждую рифмованную пару перед оценкой
+  - 4-уровневая классификация: TRUE / APPROXIMATE / FAKE / BANALE с конкретными русскими примерами
+  - 8 fake-rhyme примеров из реальных провалов (всё/по-своему, глаза/тебя, всё/кино, любовь/навсегда, душа/дорога и др.)
+  - Жёсткая шкала: 1 fake = score ≤ 1; 2+ fake = 0
+  - APPROXIMATE рифмы (готово/корона, кросс/слёз) явно помечены как acceptable — чтобы не задушить попсовые off-rhymes
+  - rewrite_instructions для fake обязан цитировать пару в формате «word1 / word2»
+  - Деплоено на сервер, бот рестартован.
 - **Phase 4 COMPLETE — Subject Understanding (U→G→C→R):**
   - `d967c5d` feat(ai): add Subject Understanding (U) step before G→C→R pipeline. New `src/ai/analyzer.js` (211 lines) — `understandSubject()` returns 8-field portrait JSON via Sonnet 4.6, 2-attempt retry, 30s budget, returns null on exhaustion (graceful degradation). Pipeline rewired: Step U executes first; portrait threaded as optional 3rd/4th param into `generateLyrics()`/`critiqueDraft()`/`rewriteDraft()`. All signatures backward-compatible via `portrait = null` default.
   - **Live test failure surfaced grounding gap:** Зевс song delivered with rich Zeus/громовержец wordplay but ZERO occurrences of «пёс»/«собака»/«лабрадор»/«лапа»/«хвост» — listener could not identify subject category. Root cause: analyzer's `phrases_to_AVOID` contained «верный пёс» → generator over-generalized to "don't say пёс anywhere".
@@ -136,13 +144,14 @@ Credits списываются. Повторная генерация обычн
 - Открытие: P1_ не критичен, cookie — главная аутентификация (тест 13.04)
 
 ## Now
-- **Phase 4 закрыт и задокументирован.** Pipeline U→G→C→R работает в проде, grounding fix подтверждён живым тестом. Готов к Phase 5 (A/B Validation) когда наберём 10-15 реальных кейсов.
+- **Phase 4 закрыт + critic rhyme_quality ужесточён (03a4d63).** Pipeline U→G→C→R работает в проде с новой DIMENSION 3 (4-уровневая классификация рифм + жёсткая шкала). Бот рестартован. Готов к следующему живому заказу для проверки эффекта.
 
 ## Next
+- Следующий живой заказ → смотреть `[critic] weak rhyme_quality (...)` в логах: критик должен теперь явно перечислять fake пары и снижать оценку
+- Если фейк-рифмы всё ещё проходят → дополнить `CRITIC_SYSTEM_PROMPT` ещё примерами или добавить программный детектор в `metrics.js` (last-2-chars heuristic)
+- Если CLEAN_DRAFT тест начнёт падать на total >= 12 — подправить fixture (заменить approximate-pairs на true rhymes)
 - Мониторить `[pipeline] grounding ok (draft)` rate за следующие 10-20 живых заказов (target >= 70%)
-- Мониторить `[pipeline] grounding MISS (rewritten)` (target near zero) — если выше 0, ужесточить промпт rewriter
-- Phase 5 (`/gsd-plan-phase 5`): собрать 10-15 реальных тест-кейсов в `.planning/testcases/`, прогнать обе версии (старый G→C→R vs новый U→G→C→R), blind listening, go/no-go
-- Если grounding ratio стабильный — рассмотреть включение metrics fast path обратно (сейчас OFF после 5ebf501)
+- Phase 5 (`/gsd-plan-phase 5`): собрать 10-15 реальных тест-кейсов в `.planning/testcases/`, A/B blind listening, go/no-go
 - Robokassa: включить PAYWALL_ENABLED=true когда готов прайсинг
 
 ## Open questions
