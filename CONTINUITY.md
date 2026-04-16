@@ -117,11 +117,11 @@ Credits списываются. Повторная генерация обычн
 - Открытие: P1_ не критичен, cookie — главная аутентификация (тест 13.04)
 
 ## Now
-- Phase 1 COMPLETE. All 3 plans done (2aea5c7, 607c612, 90c1715). ROADMAP Phase 1 marked Complete.
+- Phase 2 Plan 03 IN PROGRESS: Task 1 (verification suite) running. Task 2 is a checkpoint:human-verify.
 
 ## Next
-- Phase 2: Critic integration (Claude Sonnet 4.6 via OpenRouter)
-- Update ROADMAP for Phase 2 planning
+- Task 1 complete → commit → present Task 2 checkpoint for user sign-off
+- Phase 3: Rewriter + pipeline orchestration (Gemini 2.5 Flash)
 - Следить за логами бота при реальном использовании
 - Robokassa: включить PAYWALL_ENABLED=true когда готов прайсинг
 
