@@ -43,7 +43,11 @@ Plans:
   3. The critique includes a `keep_sections` list with at least 2 sections marked KEEP
   4. The LLM-judge specificity call (METRICS-03) contributes to the Story Specificity score — a draft with no proper nouns or time expressions scores lower than one with them
   5. A draft passing the Phase 1 gate with no banale pairs and no syllable violations produces a critique `total` >= 12 (skip condition holds)
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 02-01-PLAN.md — Wave 1: skeleton src/ai/critic.js + RED test contract + config + scripts
+- [ ] 02-02-PLAN.md — Wave 2: implement judgeSpecificity + critiqueDraft, flip 6 tests to GREEN
+- [ ] 02-03-PLAN.md — Wave 3: verify suite + manual critique inspection + phase closure
 **AI hint**: yes
 
 ### Phase 3: Rewriter and Full Pipeline
