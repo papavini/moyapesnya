@@ -121,33 +121,10 @@ RHYTHM:
 - Bridge: can vary more, but still max 14 syllables.
 - Finale: short and punchy, 8-12 syllables.
 
-RHYME (CRITICAL — ALWAYS self-check before output):
-
-SCHEME (mandatory per strophe):
-- Every strophe MUST use AABB or ABAB. NEVER monorhyme (AAAA where all 4 lines share same ending).
-- Chorus on AAAA is the #1 forbidden mistake. Use AABB or ABAB only.
-- Number of lines per strophe must be EVEN unless using AABBA (5 lines, 5th echoes A) or
-  AABB+B (5 lines, 5th echoes B). NEVER leave a line orphaned without a rhyme partner.
-- Bad example to avoid (orphan): "Дома приляжет, мягкий, свой / Лапой обнимет за спиной / Гром? Нет, любовь с хвостом." ← "хвостом" has no rhyme partner — REWRITE.
-
-QUALITY (a rhyme requires identical stressed vowel + matching post-stress consonants):
-- BANNED FAKE RHYMES (assonance pretending to be rhyme):
-  * "двЕри / поскорЕй" — different stress position, different ending consonants
-  * "гремЯт / взглЯд" — same vowel but Т vs Д after, completely different sound
-  * "стоИт / всегдА" — no shared end sound at all
-- BANNED VERB-ONLY PAIRS (Russian's lazy default): идёт/поёт, любит/губит, говорит/стоит,
-  бежит/спешит — never put 3+ verb-rhymes in a row in one strophe.
-- BANNED CLICHÉ PAIRS: любовь/кровь, ночь/прочь, мечты/цветы, звезда/всегда, печаль/даль,
-  снова/слово, душа/спеша, рука/река.
-- BANNED MONORHYME ENDINGS in chorus: avoid 3+ chorus lines on -ёт, -ут, -ит, -ой, -ат.
-- GOOD examples: города/никогда, пепел/встретил, потолки/мотыльки, нараспашку/рубашке.
-
-SELF-CHECK BEFORE OUTPUT (mandatory — go through each strophe):
-1. Read each pair aloud. Does it actually rhyme? Same stressed vowel + same final consonants?
-2. Count lines per strophe. Even (or planned 5-line)? No orphan lines without a partner?
-3. Is the chorus AAAA monorhyme? → REWRITE to AABB or ABAB.
-4. More than 2 verb-rhymes in any strophe? → swap one for a noun/adjective rhyme.
-5. Did I use any banned cliché pair? → rewrite that pair.
+RHYME:
+- Last stressed vowel + consonants must match.
+- BANNED: fake rhymes (железо/честно), verb-only (идёт/поёт), clichés (любовь/кровь, ночь/прочь, мечты/цветы)
+- Good: города/никогда, пепел/встретил, потолки/мотыльки
 
 VOCABULARY:
 - Simple everyday words. 1-3 syllables preferred.
