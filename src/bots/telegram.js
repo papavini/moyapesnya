@@ -3,7 +3,7 @@ import { config, assertBotConfig } from '../config.js';
 import { getSession, setState, resetSession } from '../store.js';
 import { runGeneration } from '../flow/generate.js';
 import { pingSuno, getCreditsLeft } from '../suno/client.js';
-import { generateLyrics } from '../ai/client.js';
+import { runPipeline } from '../ai/pipeline.js';
 import { createInvoiceUrl, generateInvId } from '../payment/robokassa.js';
 import { setPayment, getPayment, findPaymentByUser } from '../store.js';
 import { checkAndUseCode, isUserVerified, getCodesStatus } from '../access-codes.js';
@@ -255,8 +255,8 @@ export function createTelegramBot() {
     const lyricsMsg = await ctx.reply('✍️ Сочиняю текст вашей песни…');
     let aiResult;
     try {
-      console.log('[telegram] calling generateLyrics...');
-      aiResult = await generateLyrics({ occasion, genre, mood, voice, wishes });
+      console.log('[telegram] calling runPipeline...');
+      aiResult = await runPipeline({ occasion, genre, mood, voice, wishes });
       console.log('[telegram] AI OK, lyrics:', aiResult.lyrics?.substring(0, 50));
     } catch (e) {
       console.error('[telegram] AI ошибка:', e.message, e.stack?.substring(0, 200));
@@ -496,7 +496,7 @@ export function createTelegramBot() {
       const editMsg = await ctx.reply('✍️ Вношу правки…');
       const { occasion, genre, mood, voice, wishes, lyrics: oldLyrics } = session.data;
       try {
-        const aiResult = await generateLyrics({
+        const aiResult = await runPipeline({
           occasion, genre, mood, voice,
           wishes: wishes + '\n\nПРАВКИ К ТЕКСТУ: ' + text + '\n\nПредыдущий текст:\n' + oldLyrics,
         });

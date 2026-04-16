@@ -1,24 +1,140 @@
 // Full G→C→R pipeline orchestrator.
 // Wraps generateLyrics() → critiqueDraft() → rewriteDraft() with gate logic and timeouts.
-// Returns {lyrics, tags, title} in all code paths (same contract as generateLyrics).
+// Returns {lyrics, tags, title} in ALL code paths (same contract as generateLyrics).
 // Zero new dependencies.
-// Wave 1 skeleton — stub calls generateLyrics and returns {lyrics, tags, title} directly.
-// Wave 3 replaces stub with full orchestrator (gates, timeouts, sycophancy guard).
 
 import { generateLyrics } from './client.js';
 import { critiqueDraft } from './critic.js';
 import { rewriteDraft } from './rewriter.js';
 
+const CRITIQUE_TIMEOUT_MS = 30_000;   // 30s — two API calls (specificity + critique)
+const REWRITE_TIMEOUT_MS = 60_000;    // 60s — thinking mode adds latency
+const SKIP_GATE_SCORE = 12;           // >= 12/15: fast path, skip rewrite
+
+/**
+ * Wraps a promise with a timeout. Rejects with an Error on timeout.
+ * @param {Promise} promise
+ * @param {number} ms
+ * @param {string} label - used in the rejection message for logging
+ * @returns {Promise}
+ */
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`[pipeline] timeout: ${label} exceeded ${ms}ms`)),
+        ms
+      )
+    ),
+  ]);
+}
+
+/**
+ * Tokenizes Russian/mixed text for word-level diff. Removes section headers, splits on
+ * non-word chars, filters short tokens. Matches tokenize() pattern from metrics.js.
+ * @param {string} text
+ * @returns {string[]}
+ */
+function tokenizeForDiff(text) {
+  return text
+    .toLowerCase()
+    .replace(/\[[^\]]*\]/g, '')          // remove [Куплет 1], [Припев], etc.
+    .split(/[^а-яёa-z0-9]+/i)            // split on non-word chars
+    .filter(w => w.length >= 2);         // same filter as metrics.js
+}
+
+/**
+ * Computes the ratio of words in rewrittenLyrics that don't appear in originalLyrics.
+ * Used as sycophancy guard: rewrite is accepted only if ratio >= 0.20.
+ * @param {string} originalLyrics
+ * @param {string} rewrittenLyrics
+ * @returns {number} 0.0 – 1.0
+ */
+function computeNewTokenRatio(originalLyrics, rewrittenLyrics) {
+  const originalWords = new Set(tokenizeForDiff(originalLyrics));
+  const rewrittenTokens = tokenizeForDiff(rewrittenLyrics);
+  if (rewrittenTokens.length === 0) return 0;
+  const newCount = rewrittenTokens.filter(w => !originalWords.has(w)).length;
+  return newCount / rewrittenTokens.length;
+}
+
 /**
  * Full Generate → Critique → Rewrite pipeline.
+ *
+ * Gate 1: metrics.skip_pipeline === true  → return immediately (no critique, no rewrite)
+ * Gate 2: critiqueDraft returns null      → return original draft (critic failure)
+ * Gate 3: critique.total >= 12            → return original draft (fast path)
+ * Gate 4: rewriteDraft returns null       → return original draft (rewriter failure)
+ * Gate 5: < 20% new tokens               → return original draft (sycophancy guard)
+ *
  * @param {{occasion: string, genre: string, mood: string, voice: string, wishes: string}} input
  * @returns {Promise<{lyrics: string, tags: string, title: string}>}
  */
 export async function runPipeline({ occasion, genre, mood, voice, wishes }) {
-  // Wave 1 stub — calls generateLyrics and returns {lyrics, tags, title} directly.
-  // Wave 3 replaces with full G→C→R orchestration with gates and timeouts.
-  void critiqueDraft;
-  void rewriteDraft;
+  // Step G: generate draft
   const draft = await generateLyrics({ occasion, genre, mood, voice, wishes });
-  return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
+  // draft = {lyrics, tags, title, metrics} — tags and title always come from here
+
+  // Gate 1: Phase 1 metrics skip gate
+  if (draft.metrics?.skip_pipeline) {
+    console.log('[pipeline] metrics gate: skip_pipeline=true — fast path');
+    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
+  }
+
+  // Step C: critique with timeout
+  let critique = null;
+  try {
+    critique = await withTimeout(
+      critiqueDraft(draft.lyrics, draft.metrics),
+      CRITIQUE_TIMEOUT_MS,
+      'critiqueDraft'
+    );
+  } catch (e) {
+    console.log('[pipeline] critique step failed:', e.message, '— using original draft');
+    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
+  }
+
+  // Gate 2: critique null (critic failure)
+  if (!critique) {
+    console.log('[pipeline] critique null — critic failed, using original draft');
+    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
+  }
+
+  // Gate 3: fast path — critique total above threshold
+  if (critique.total >= SKIP_GATE_SCORE) {
+    console.log(`[pipeline] critique total=${critique.total} — above threshold, fast path`);
+    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
+  }
+
+  // Step R: rewrite with timeout
+  let rewritten = null;
+  try {
+    rewritten = await withTimeout(
+      rewriteDraft(draft.lyrics, critique),
+      REWRITE_TIMEOUT_MS,
+      'rewriteDraft'
+    );
+  } catch (e) {
+    console.log('[pipeline] rewrite step failed:', e.message, '— using original draft');
+    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
+  }
+
+  // Gate 4: rewriter returned null (failure)
+  if (!rewritten) {
+    console.log('[pipeline] rewriteDraft returned null — using original draft');
+    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
+  }
+
+  // Gate 5: sycophancy guard — require >= 20% new tokens
+  const newTokenRatio = computeNewTokenRatio(draft.lyrics, rewritten.lyrics);
+  if (newTokenRatio < 0.20) {
+    console.log(
+      `[pipeline] rewrite rejected (sycophancy: only ${(newTokenRatio * 100).toFixed(1)}% new tokens), using original`
+    );
+    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
+  }
+
+  console.log(`[pipeline] rewrite accepted: ${(newTokenRatio * 100).toFixed(1)}% new tokens`);
+  return { lyrics: rewritten.lyrics, tags: draft.tags, title: draft.title };
 }
