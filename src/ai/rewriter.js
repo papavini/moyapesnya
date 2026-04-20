@@ -1,11 +1,13 @@
 // Rewrites a song draft given a structured critique from critic.js.
-// Uses google/gemini-2.5-flash with thinking mode ON (reasoning.max_tokens = 8000).
+// Model: config.ai.rewriterModel (default anthropic/claude-sonnet-4.6 — see src/config.js).
+// History: was google/gemini-2.5-flash; switched to Sonnet 4.6 in 34f4f27 because Flash
+// echoed the draft (~1.3% novelty). Sonnet's extended thinking requires temperature=1.0.
 // Returns {lyrics} on success, null on failure or exhausted retries.
 // Zero new dependencies.
 
 import { config } from '../config.js';
 
-const REWRITER_MODEL = config.ai.rewriterModel || 'google/gemini-2.5-flash';
+const REWRITER_MODEL = config.ai.rewriterModel || 'anthropic/claude-sonnet-4.6';
 
 // Dimensions the rewriter may fix (score 0-1 in critique)
 const DIMS = ['story_specificity', 'chorus_identity', 'rhyme_quality', 'singability', 'emotional_honesty'];
@@ -152,10 +154,10 @@ export async function rewriteDraft(lyrics, critique, portrait = null) {
       { role: 'user', content: buildRewriterUserMessage(lyrics, critique, portrait) },
     ],
     max_tokens: 16000,
-    // Claude with extended thinking REQUIRES temperature=1.0; Gemini Flash also tolerates it.
+    // Claude with extended thinking REQUIRES temperature=1.0.
     temperature: 1.0,
     reasoning: { max_tokens: 8000 },
-    // response_format: omit — incompatible with reasoning ON for Gemini and Claude via OpenRouter
+    // response_format: omit — incompatible with reasoning ON via OpenRouter
   };
 
   for (let attempt = 1; attempt <= 2; attempt++) {
