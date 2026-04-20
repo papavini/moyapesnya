@@ -15,7 +15,11 @@
       "WebFetch(domain:arxiv.org)",
       "WebFetch(domain:discuss.ai.google.dev)",
       "WebFetch(domain:www.ixbt.com)",
-      "WebFetch(domain:openrouter.ai)"
+      "WebFetch(domain:openrouter.ai)",
+      "Skill(gsd-help)",
+      "Skill(gsd-help:*)",
+      "Skill(gsd-plan-phase)",
+      "Skill(gsd-plan-phase:*)"
     ]
   }
 }
