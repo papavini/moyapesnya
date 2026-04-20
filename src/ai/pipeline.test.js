@@ -147,8 +147,8 @@ describe('runPipeline — KEEP sections verbatim (PIPELINE-04 SC4)', () => {
     const { critiqueDraft } = await import('./critic.js');
     const metrics = scoreDraft(GENERIC_DRAFT);
     const critique = await critiqueDraft(GENERIC_DRAFT, metrics);
-    if (!critique || critique.total >= 12) {
-      console.log('[SC4] skipping: critique null or total>=12 (fast path)');
+    if (!critique || critique.total >= 13) {
+      console.log('[SC4] skipping: critique null or total>=13 (fast path)');
       return;
     }
 

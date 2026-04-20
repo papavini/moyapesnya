@@ -11,7 +11,7 @@ import { understandSubject } from './analyzer.js';
 const ANALYZER_TIMEOUT_MS = 30_000;   // 30s — single Sonnet call, no thinking, structured JSON
 const CRITIQUE_TIMEOUT_MS = 30_000;   // 30s — two API calls (specificity + critique)
 const REWRITE_TIMEOUT_MS = 90_000;    // 90s — Claude Sonnet 4.6 with extended thinking is slower than Gemini Flash
-const SKIP_GATE_SCORE = 12;           // >= 12/15: fast path, skip rewrite
+const SKIP_GATE_SCORE = 13;           // >= 13/15: fast path, skip rewrite (raised from 12 — Зевс v5 had total=12 with rq=1, fast-pathed despite critic flagging «привет/ответ»)
 // Soul floor: rhyme/singability are objective and can carry total to >=12 even when story
 // or emotion are 0/1 (e.g. [3,3,3,3,0]). These two dims are non-negotiable — if either
 // drops below DIM_FLOOR, force rewrite regardless of total.
@@ -89,8 +89,9 @@ function computeNewTokenRatio(originalLyrics, rewrittenLyrics) {
  * Step U:  build subject portrait (analyzer); null on failure → degrades gracefully
  * Gate 1: metrics.skip_pipeline === true  → return immediately (no critique, no rewrite)
  * Gate 2: critiqueDraft returns null      → return original draft (critic failure)
- * Gate 3: critique.total >= 12 AND        → return original draft (fast path)
+ * Gate 3: critique.total >= 13 AND        → return original draft (fast path)
  *         every DEAL_BREAKER_DIM >= 2        soul floor: forces rewrite if story or emotion fail
+ *         (raised from 12 — borderline 12 was letting through drafts the critic itself flagged)
  * Gate 4: rewriteDraft returns null       → return original draft (rewriter failure)
  * Gate 5: < 15% new tokens                → return original draft (sycophancy guard)
  *
