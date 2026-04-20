@@ -9,7 +9,7 @@ import { rewriteDraft } from './rewriter.js';
 import { understandSubject } from './analyzer.js';
 
 const ANALYZER_TIMEOUT_MS = 30_000;   // 30s — single Sonnet call, no thinking, structured JSON
-const CRITIQUE_TIMEOUT_MS = 30_000;   // 30s — two API calls (specificity + critique)
+const CRITIQUE_TIMEOUT_MS = 60_000;   // 60s — two API calls (specificity + critique) + up to 2 retries; raised from 30s after Герыч v1 (20 апр 11:50): critic finished at 11:52:09 (94s) with valid total=9 critique, but pipeline already timed out at 11:51:05 and shipped original draft
 const REWRITE_TIMEOUT_MS = 90_000;    // 90s — Claude Sonnet 4.6 with extended thinking is slower than Gemini Flash
 const SKIP_GATE_SCORE = 13;           // >= 13/15: fast path, skip rewrite (raised from 12 — Зевс v5 had total=12 with rq=1, fast-pathed despite critic flagging «привет/ответ»)
 // Soul floor: rhyme/singability are objective and can carry total to >=12 even when story

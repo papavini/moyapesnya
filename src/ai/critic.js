@@ -365,7 +365,7 @@ export async function critiqueDraft(lyrics, metrics, portrait = null) {
       { role: 'user', content: userMessage },
     ],
     response_format: { type: 'json_object' },
-    max_tokens: 2000,
+    max_tokens: 4000,  // raised 2000→4000: Герыч v1 (11:51:59) attempt 1 truncated at position 473 — JSON with 5 dims + long Russian rewrite_instructions + keep_sections needs more headroom; price unchanged (we pay for actual tokens, not the cap)
     temperature: 0.2,
     // reasoning: OMITTED — no thinking for critic (Pitfall 4)
   };
