@@ -12,6 +12,11 @@ const ANALYZER_TIMEOUT_MS = 30_000;   // 30s — single Sonnet call, no thinking
 const CRITIQUE_TIMEOUT_MS = 30_000;   // 30s — two API calls (specificity + critique)
 const REWRITE_TIMEOUT_MS = 90_000;    // 90s — Claude Sonnet 4.6 with extended thinking is slower than Gemini Flash
 const SKIP_GATE_SCORE = 12;           // >= 12/15: fast path, skip rewrite
+// Soul floor: rhyme/singability are objective and can carry total to >=12 even when story
+// or emotion are 0/1 (e.g. [3,3,3,3,0]). These two dims are non-negotiable — if either
+// drops below DIM_FLOOR, force rewrite regardless of total.
+const DEAL_BREAKER_DIMS = ['story_specificity', 'emotional_honesty'];
+const DIM_FLOOR = 2;
 
 /**
  * Wraps a promise with a timeout. Rejects with an Error on timeout.
@@ -67,7 +72,8 @@ function computeNewTokenRatio(originalLyrics, rewrittenLyrics) {
  * Step U:  build subject portrait (analyzer); null on failure → degrades gracefully
  * Gate 1: metrics.skip_pipeline === true  → return immediately (no critique, no rewrite)
  * Gate 2: critiqueDraft returns null      → return original draft (critic failure)
- * Gate 3: critique.total >= 12            → return original draft (fast path)
+ * Gate 3: critique.total >= 12 AND        → return original draft (fast path)
+ *         every DEAL_BREAKER_DIM >= 2        soul floor: forces rewrite if story or emotion fail
  * Gate 4: rewriteDraft returns null       → return original draft (rewriter failure)
  * Gate 5: < 15% new tokens                → return original draft (sycophancy guard)
  *
@@ -128,8 +134,16 @@ export async function runPipeline({ occasion, genre, mood, voice, wishes }) {
     return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
   }
 
-  // Gate 3: fast path — critique total above threshold
-  if (critique.total >= SKIP_GATE_SCORE) {
+  // Gate 3: fast path — critique total above threshold AND soul floor not violated.
+  // Soul floor: story_specificity and emotional_honesty must each be >= DIM_FLOOR (2).
+  // Without this, [3,3,3,3,0] (story=0) gives total=12 and skips rewrite — listener gets
+  // a technically clean lyric with no recognisable subject. Force rewrite in that case.
+  const failedSoul = DEAL_BREAKER_DIMS.filter(
+    dim => (critique[dim]?.score ?? 3) < DIM_FLOOR
+  );
+  if (failedSoul.length > 0) {
+    console.log(`[pipeline] soul gate: ${failedSoul.join(', ')} below floor (${DIM_FLOOR}) — forcing rewrite`);
+  } else if (critique.total >= SKIP_GATE_SCORE) {
     console.log(`[pipeline] critique total=${critique.total} — above threshold, fast path`);
     return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
   }
