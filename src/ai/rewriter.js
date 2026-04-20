@@ -9,6 +9,16 @@ import { config } from '../config.js';
 
 const REWRITER_MODEL = config.ai.rewriterModel || 'anthropic/claude-sonnet-4.6';
 
+// Word-boundary check — replaces naive `text.includes(word)` which gave
+// false positives like 'нос' matching 'носит' or 'кот' matching 'который'.
+// Mirror copy of pipeline.js#hasWordMatch — keep these in sync.
+function hasWordMatch(text, word) {
+  if (!text || !word) return false;
+  const escaped = word.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(?:^|[^а-яёА-ЯЁa-zA-Z])${escaped}(?:[^а-яёА-ЯЁa-zA-Z]|$)`, 'i');
+  return re.test(text);
+}
+
 // Dimensions the rewriter may fix (score 0-1 in critique)
 const DIMS = ['story_specificity', 'chorus_identity', 'rhyme_quality', 'singability', 'emotional_honesty'];
 
@@ -107,8 +117,7 @@ function buildRewriterUserMessage(lyrics, critique, portrait) {
       ? portrait.subject_category_nouns.filter(n => typeof n === 'string' && n.trim().length)
       : [];
     if (categoryNouns.length) {
-      const lyricsLower = lyrics.toLowerCase();
-      const missingAll = !categoryNouns.some(n => lyricsLower.includes(n.toLowerCase()));
+      const missingAll = !categoryNouns.some(n => hasWordMatch(lyrics, n));
       sections.push(
         '## ОБЯЗАТЕЛЬНЫЕ СЛОВА (заземляют слушателя — без них непонятно про КОГО песня):',
         `В финальном тексте ОБЯЗАТЕЛЬНО должно прозвучать ХОТЯ БЫ ОДНО из: ${categoryNouns.map(n => `«${n}»`).join(', ')}`,

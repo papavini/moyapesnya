@@ -23,6 +23,16 @@ Respond with EXACTLY this JSON (no other text, no code fences):
 SONG TEXT:
 ${lyrics}`;
 
+// Word-boundary check — replaces naive `text.includes(word)` which gave
+// false positives like 'нос' matching 'носит' or 'кот' matching 'который'.
+// Mirror copy of pipeline.js#hasWordMatch — keep these in sync.
+function hasWordMatch(text, word) {
+  if (!text || !word) return false;
+  const escaped = word.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(?:^|[^а-яёА-ЯЁa-zA-Z])${escaped}(?:[^а-яёА-ЯЁa-zA-Z]|$)`, 'i');
+  return re.test(text);
+}
+
 // PIPELINE-03 — list of dimension keys, used by parser and total re-computation.
 const DIMS = [
   'story_specificity',
@@ -184,9 +194,8 @@ function buildCriticUserMessage(lyrics, metrics, specificity, portrait) {
       ? portrait.subject_category_nouns.filter(n => typeof n === 'string' && n.trim().length)
       : [];
     if (categoryNouns.length) {
-      const lyricsLower = lyrics.toLowerCase();
-      const present = categoryNouns.filter(n => lyricsLower.includes(n.toLowerCase()));
-      const missing = categoryNouns.filter(n => !lyricsLower.includes(n.toLowerCase()));
+      const present = categoryNouns.filter(n => hasWordMatch(lyrics, n));
+      const missing = categoryNouns.filter(n => !hasWordMatch(lyrics, n));
       sections.push(
         '## GROUNDING CHECK (pre-computed — DO NOT contradict):',
         `Subject category nouns from portrait: ${categoryNouns.map(n => `«${n}»`).join(', ')}`,

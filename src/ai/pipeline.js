@@ -38,6 +38,23 @@ function withTimeout(promise, ms, label) {
 }
 
 /**
+ * Word-boundary check for a Russian/mixed-script word inside arbitrary text.
+ * Replaces naive `text.includes(word)` which gave false positives like
+ * `'нос'` matching `'носит'` or `'кот'` matching `'который'`.
+ * Boundary = start/end of string OR any char that is NOT a Russian/Latin letter.
+ * Re-implemented (not imported) in critic.js and rewriter.js — keep these in sync.
+ * @param {string} text
+ * @param {string} word — bare noun, no spaces, case-insensitive
+ * @returns {boolean}
+ */
+export function hasWordMatch(text, word) {
+  if (!text || !word) return false;
+  const escaped = word.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(?:^|[^а-яёА-ЯЁa-zA-Z])${escaped}(?:[^а-яёА-ЯЁa-zA-Z]|$)`, 'i');
+  return re.test(text);
+}
+
+/**
  * Tokenizes Russian/mixed text for word-level diff. Removes section headers, splits on
  * non-word chars, filters short tokens. Matches tokenize() pattern from metrics.js.
  * @param {string} text
@@ -197,8 +214,7 @@ function logGroundingCheck(lyrics, portrait, stage) {
     ? portrait.subject_category_nouns.filter(n => typeof n === 'string' && n.trim().length)
     : [];
   if (!nouns.length) return;
-  const lower = lyrics.toLowerCase();
-  const present = nouns.filter(n => lower.includes(n.toLowerCase()));
+  const present = nouns.filter(n => hasWordMatch(lyrics, n));
   if (present.length) {
     console.log(`[pipeline] grounding ok (${stage}): present ${present.map(n => `«${n}»`).join(', ')}`);
   } else {
