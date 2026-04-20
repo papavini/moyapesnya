@@ -209,6 +209,22 @@ function buildCriticUserMessage(lyrics, metrics, specificity, portrait) {
     }
   }
 
+  // Lost-fact verdict: proper nouns from user wishes that the generator dropped.
+  // Pre-computed in client.js (findLostFacts). Critic must penalize story_specificity
+  // and produce explicit rewrite_instructions to insert these names back.
+  const lostFacts = Array.isArray(metrics?.lost_facts) ? metrics.lost_facts : [];
+  if (lostFacts.length) {
+    sections.push(
+      '## LOST FACTS (proper nouns from user wishes that did NOT make it into lyrics — DO NOT contradict):',
+      `Missing: ${lostFacts.map(f => `«${f}»`).join(', ')}`,
+      'VERDICT: story_specificity.score MUST be ≤ 1. rewrite_instructions for story_specificity',
+      'MUST require inserting at least one of these proper nouns into the lyrics (preferably',
+      'in [Куплет 1] or [Припев]). These are the user\'s actual words — losing them means',
+      'the song no longer matches the order.',
+      ''
+    );
+  }
+
   sections.push(
     '## Pre-computed metrics (treat as GROUNDING FACTS — do not contradict these):',
     '```json',

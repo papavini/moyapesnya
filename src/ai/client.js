@@ -1,6 +1,6 @@
 // Using Node 22 built-in fetch (not undici — undici fetch fails in Docker)
 import { config } from '../config.js';
-import { scoreDraft } from './metrics.js';
+import { scoreDraft, findLostFacts } from './metrics.js';
 
 const SYSTEM_PROMPT = `You are a gifted Russian songwriter — not a rhyme machine, but a STORYTELLER who writes songs that make people laugh, cry, and feel seen.
 
@@ -500,6 +500,11 @@ export async function generateLyrics({ occasion, genre, mood, voice, wishes, por
   const title = extractTitle(lyrics, occasion, wishes);
 
   const metrics = scoreDraft(lyrics);
+  // Lost-fact gate: proper nouns from user wishes that did NOT make it into lyrics.
+  // Если пользователь упомянул «Yamaha», «Казань», «Зевс» и т.д., а в финале их нет —
+  // pipeline не должен делать fast path; критик должен пенализировать story_specificity
+  // и rewriter обязан вставить пропущенные факты.
+  metrics.lost_facts = findLostFacts(wishes, lyrics);
   console.log('[ai] metrics:', JSON.stringify(metrics));
   return { lyrics, tags, title, metrics };
 }

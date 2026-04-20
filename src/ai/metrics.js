@@ -244,6 +244,87 @@ function computeMATTR(tokens, windowSize = MATTR_WINDOW) {
   return sum / windowCount;
 }
 
+// Sentence-initial words that look like proper nouns (start with capital) but are NOT.
+// Used by extractProperNouns to skip false positives. Add as we observe new ones.
+const SENTENCE_INITIAL_NON_NOUNS = new Set([
+  'Я', 'Ты', 'Он', 'Она', 'Мы', 'Вы', 'Они', 'Это', 'Тот', 'Та', 'Те', 'Этот', 'Эта', 'Эти',
+  'Когда', 'Если', 'Потом', 'Так', 'Тогда', 'Где', 'Кто', 'Что', 'Хотя', 'Также', 'Только',
+  'Сейчас', 'Теперь', 'Часто', 'Никогда', 'Всегда', 'Иногда', 'Здесь', 'Там', 'Тут',
+  'Желания', 'Желаний', 'Проложить', 'Купили', 'Пока', 'Дальше', 'Ещё', 'Уже',
+  'Может', 'Должен', 'Будет', 'Был', 'Была', 'Были', 'Есть', 'Нет',
+  'Сначала', 'Потому', 'Поэтому', 'Просто', 'Очень', 'Самый', 'Вот',
+]);
+
+// Word-boundary check — duplicate of pipeline.js#hasWordMatch / critic.js / rewriter.js.
+// Kept here so metrics.js stays import-free (other consumers may load metrics standalone).
+function hasWordMatch(text, word) {
+  if (!text || !word) return false;
+  const escaped = word.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(?:^|[^а-яёА-ЯЁa-zA-Z])${escaped}(?:[^а-яёА-ЯЁa-zA-Z]|$)`, 'i');
+  return re.test(text);
+}
+
+/**
+ * Извлекает proper nouns (имена, города, бренды) из свободного wishes-текста пользователя.
+ * Эвристика: токен начинается с заглавной буквы (кириллица или латиница), длина >= 2,
+ * и НЕ находится в начале предложения (чтобы не ловить «Когда», «Я», «Это» и т.д.).
+ * Sentence-initial токены сравниваются со стоп-листом — если они там, пропускаем.
+ *
+ * False negatives возможны: имя в начале предложения «Зевс — наш пёс» не будет извлечено.
+ * False positives возможны: незнакомые sentence-initial слова. Стоп-лист расширяется со временем.
+ *
+ * @param {string} text — свободный текст (wishes)
+ * @returns {string[]} — уникальные proper nouns
+ */
+export function extractProperNouns(text) {
+  if (!text || typeof text !== 'string') return [];
+  const tokens = text.split(/\s+/);
+  const nouns = new Set();
+
+  for (let i = 0; i < tokens.length; i++) {
+    // Strip surrounding punctuation
+    const tok = tokens[i].replace(/^[.,!?;:—–\-«»"'()]+|[.,!?;:—–\-«»"'()]+$/g, '').trim();
+    if (tok.length < 2) continue;
+
+    // Must start with uppercase Cyrillic or Latin
+    if (!/^[A-ZА-ЯЁ]/.test(tok)) continue;
+
+    // Detect sentence-initial: prev token ends in .!? OR this is i=0
+    const prevToken = i > 0 ? tokens[i - 1].trim() : '';
+    const isSentenceStart = i === 0 || /[.!?]$/.test(prevToken);
+
+    if (isSentenceStart) {
+      // Sentence-initial: only count if NOT in known non-noun set
+      if (SENTENCE_INITIAL_NON_NOUNS.has(tok)) continue;
+      // Otherwise — could be a proper noun, but to be safe we still skip;
+      // this trades false negatives for fewer false positives.
+      continue;
+    }
+
+    nouns.add(tok);
+  }
+
+  return Array.from(nouns);
+}
+
+/**
+ * Находит proper nouns из wishes, которые НЕ попали в финальный текст песни.
+ * Используется как «lost-fact gate» — если пользователь упомянул «Yamaha», «Казань»
+ * или имя адресата, и этих слов нет в lyrics — генератор провалил перевод входных
+ * данных, и pipeline должен вызвать критика/rewriter, а не отдавать как есть.
+ *
+ * Word-boundary check, не substring (иначе «Нижний» матчил бы «нижний» в обычном слове).
+ *
+ * @param {string} wishes — исходный текст от пользователя
+ * @param {string} lyrics — сгенерированный текст песни
+ * @returns {string[]} — proper nouns, потерянные при генерации
+ */
+export function findLostFacts(wishes, lyrics) {
+  const properNouns = extractProperNouns(wishes);
+  if (properNouns.length === 0) return [];
+  return properNouns.filter(n => !hasWordMatch(lyrics, n));
+}
+
 /**
  * Оценивает черновик текста песни по трём метрикам качества.
  * Синхронная функция, без I/O, без зависимостей.
