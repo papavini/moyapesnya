@@ -4,6 +4,7 @@ import { getSession, setState, resetSession } from '../store.js';
 import { runGeneration } from '../flow/generate.js';
 import { pingSuno, getCreditsLeft } from '../suno/client.js';
 import { runPipeline } from '../ai/pipeline.js';
+import { saveDeliveredLyrics } from '../lyrics-archive.js';
 import { createInvoiceUrl, generateInvId } from '../payment/robokassa.js';
 import { setPayment, getPayment, findPaymentByUser } from '../store.js';
 import { checkAndUseCode, isUserVerified, getCodesStatus } from '../access-codes.js';
@@ -266,11 +267,17 @@ export function createTelegramBot() {
       return;
     }
 
-    // Сохраняем текст в сессию
+    // Сохраняем текст + провенанс (portrait/metrics/critique) в сессию — нужно для архива
+    // при доставке. Эти поля опциональны и не ломают existing flow.
     setState(PLATFORM, ctx.from.id, 'review_lyrics', {
       lyrics: aiResult.lyrics,
       tags: aiResult.tags,
       title: aiResult.title,
+      portrait: aiResult.portrait,
+      metrics: aiResult.metrics,
+      critique: aiResult.critique,
+      was_rewritten: aiResult.was_rewritten,
+      original_lyrics: aiResult.original_lyrics,
     });
 
     // Показываем текст + мотивация + кнопки
@@ -659,6 +666,12 @@ export function createTelegramBot() {
 async function handleGenerate(ctx, opts) {
   console.log('[telegram] handleGenerate called, mode:', opts.mode, 'has lyrics:', !!opts.lyrics);
 
+  // Снимок сессии до resetSession — данные нужны для архива после доставки клипов.
+  // order (occasion/genre/mood/voice/wishes) и pipeline provenance (portrait/metrics/critique)
+  // пропадают при resetSession; подхватываем заранее. Всё опционально — если сессия пуста
+  // (например прямой вход через старые пути), поля будут undefined и archive запишет meta-less.
+  const sessionSnapshot = getSession(PLATFORM, ctx.from.id)?.data || {};
+
   // Мотивационное сообщение
   await ctx.reply(
     '🥺 Не каждый подарок умеет говорить "я рядом"…\n\n' +
@@ -763,4 +776,29 @@ async function handleGenerate(ctx, opts) {
       await ctx.reply(`🎵 ${clip.title || 'Ваш трек'}\n${clip.audioUrl}\n\nХотите ещё? /start`);
     }
   }
+
+  // Архив доставленной песни. Не блокируем user path — saveDeliveredLyrics ловит все
+  // ошибки внутри, возвращает null при неудаче. Никогда не ждём долго.
+  saveDeliveredLyrics({
+    platform: PLATFORM,
+    userId: ctx.from.id,
+    order: {
+      occasion: sessionSnapshot.occasion,
+      genre: sessionSnapshot.genre,
+      mood: sessionSnapshot.mood,
+      voice: sessionSnapshot.voice,
+      wishes: sessionSnapshot.wishes,
+    },
+    result: {
+      lyrics: opts.lyrics,
+      tags: opts.tags,
+      title: opts.title,
+      portrait: sessionSnapshot.portrait,
+      metrics: sessionSnapshot.metrics,
+      critique: sessionSnapshot.critique,
+      was_rewritten: sessionSnapshot.was_rewritten,
+      original_lyrics: sessionSnapshot.original_lyrics,
+    },
+    clips: result.clips,
+  }).catch(e => console.warn('[archive] unexpected:', e.message));
 }

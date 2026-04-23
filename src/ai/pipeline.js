@@ -136,7 +136,7 @@ export async function runPipeline({ occasion, genre, mood, voice, wishes }) {
   const fakeRhymes = draft.metrics?.rhymes?.fake ?? [];
   if (draft.metrics?.skip_pipeline && lostFacts.length === 0 && fakeRhymes.length === 0) {
     console.log('[pipeline] metrics gate: skip_pipeline=true + no lost facts + no fake rhymes — fast path');
-    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
+    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title, portrait, metrics: draft.metrics, critique: null, was_rewritten: false };
   }
   if (draft.metrics?.skip_pipeline && lostFacts.length > 0) {
     console.log(`[pipeline] metrics ok BUT lost facts: ${lostFacts.map(f => `«${f}»`).join(', ')} — forcing critic`);
@@ -155,13 +155,13 @@ export async function runPipeline({ occasion, genre, mood, voice, wishes }) {
     );
   } catch (e) {
     console.log('[pipeline] critique step failed:', e.message, '— using original draft');
-    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
+    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title, portrait, metrics: draft.metrics, critique: null, was_rewritten: false };
   }
 
   // Gate 2: critique null (critic failure)
   if (!critique) {
     console.log('[pipeline] critique null — critic failed, using original draft');
-    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
+    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title, portrait, metrics: draft.metrics, critique: null, was_rewritten: false };
   }
 
   // Gate 3: fast path — critique total above threshold AND soul floor not violated.
@@ -175,7 +175,7 @@ export async function runPipeline({ occasion, genre, mood, voice, wishes }) {
     console.log(`[pipeline] soul gate: ${failedSoul.join(', ')} below floor (${DIM_FLOOR}) — forcing rewrite`);
   } else if (critique.total >= SKIP_GATE_SCORE) {
     console.log(`[pipeline] critique total=${critique.total} — above threshold, fast path`);
-    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
+    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title, portrait, metrics: draft.metrics, critique, was_rewritten: false };
   }
 
   // Step R: rewrite with timeout (portrait keeps the rewrite anchored to the same character)
@@ -188,13 +188,13 @@ export async function runPipeline({ occasion, genre, mood, voice, wishes }) {
     );
   } catch (e) {
     console.log('[pipeline] rewrite step failed:', e.message, '— using original draft');
-    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
+    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title, portrait, metrics: draft.metrics, critique, was_rewritten: false };
   }
 
   // Gate 4: rewriter returned null (failure)
   if (!rewritten) {
     console.log('[pipeline] rewriteDraft returned null — using original draft');
-    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
+    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title, portrait, metrics: draft.metrics, critique, was_rewritten: false };
   }
 
   // Gate 5: sycophancy guard — require >= 15% new tokens.
@@ -205,14 +205,14 @@ export async function runPipeline({ occasion, genre, mood, voice, wishes }) {
     console.log(
       `[pipeline] rewrite rejected (sycophancy: only ${(newTokenRatio * 100).toFixed(1)}% new tokens), using original`
     );
-    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
+    return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title, portrait, metrics: draft.metrics, critique, was_rewritten: false };
   }
 
   console.log(`[pipeline] rewrite accepted: ${(newTokenRatio * 100).toFixed(1)}% new tokens`);
   // Grounding post-check — visibility only. If we still ship lyrics without any
   // subject_category_noun, we want that screaming in the logs so we can catch it.
   logGroundingCheck(rewritten.lyrics, portrait, 'rewritten');
-  return { lyrics: rewritten.lyrics, tags: draft.tags, title: draft.title };
+  return { lyrics: rewritten.lyrics, tags: draft.tags, title: draft.title, portrait, metrics: draft.metrics, critique, was_rewritten: true, original_lyrics: draft.lyrics };
 }
 
 /**
