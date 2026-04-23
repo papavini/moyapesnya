@@ -1,6 +1,7 @@
 // Two-call LLM critic: specificity judge (METRICS-03) + 5-dimension critique (PIPELINE-03).
-// Uses anthropic/claude-sonnet-4.6 via OpenRouter. No new dependencies.
-// Wave 2: real OpenRouter calls replace Wave 1 stubs.
+// Critic uses anthropic/claude-sonnet-4.6 (heavy rubric reasoning). Judge uses
+// anthropic/claude-haiku-4.5 (cheap binary yes/no). Both via OpenRouter.
+// No new dependencies. Wave 2: real OpenRouter calls replace Wave 1 stubs.
 
 import { config } from '../config.js';
 

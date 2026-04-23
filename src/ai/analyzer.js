@@ -1,6 +1,7 @@
 // Subject Understanding layer (Phase 4) — extracts a rich portrait of the song subject
 // BEFORE generation, so the poet has a real character to write about, not just raw tags.
-// Uses anthropic/claude-sonnet-4.6 via OpenRouter. No new dependencies.
+// Default model: anthropic/claude-haiku-4.5 (cost-optimized, structured JSON extraction).
+// Env override via AI_ANALYZER_MODEL. No new dependencies.
 
 import { config } from '../config.js';
 
