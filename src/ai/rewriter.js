@@ -1,10 +1,14 @@
 // Rewrites a song draft given a structured critique from critic.js.
 // Model: config.ai.rewriterModel (default anthropic/claude-sonnet-4.6 — see src/config.js).
-// History: was google/gemini-2.5-flash; switched to Sonnet 4.6 in 34f4f27 because Flash
-// echoed the draft (~1.3% novelty). Extended thinking was ON until now — removed to halve
-// cost (~$0.11 → ~$0.03 per rewrite; thinking alone was ~3000-5000 output tokens that never
-// reached the user). Quality guarded by: explicit rewrite_instructions from critic (each
-// weak dim quotes a specific line), KEEP guard in prompt, post-check newTokenRatio >= 15%.
+// History:
+//  - Originally google/gemini-2.5-flash; switched to Sonnet 4.6 in 34f4f27 because Flash
+//    echoed the draft (~1.3% novelty).
+//  - Commit 1015847 убрал extended thinking (cost ~$0.11 → ~$0.03). Результат — Герыч v2
+//    (23.04 19:11): 7s latency, но 12.4% new tokens → rejected by sycophancy guard 15%
+//    → pipeline отдал original draft с 37 fake rhymes. Rewriter без thinking стал ленив.
+//  - Текущий коммит: thinking обратно ON, но с budget 3000 (было 8000) — компромисс
+//    качество/цена (~$0.06 вместо $0.11). Sonnet требует temperature=1.0 при reasoning.
+// Quality guards: explicit rewrite_instructions from critic, KEEP guard, newTokenRatio>=15%.
 // Returns {lyrics} on success, null on failure or exhausted retries.
 // Zero new dependencies.
 
@@ -165,12 +169,15 @@ export async function rewriteDraft(lyrics, critique, portrait = null) {
       { role: 'system', content: REWRITER_SYSTEM_PROMPT },
       { role: 'user', content: buildRewriterUserMessage(lyrics, critique, portrait) },
     ],
-    // Thinking OFF → can use json_object mode; max_tokens right-sized for structured output
-    // (no reasoning tokens to budget). ~4000 tok covers 25-line lyrics + JSON wrapping.
-    max_tokens: 4000,
-    temperature: 0.7,
-    response_format: { type: 'json_object' },
-    // reasoning: OMITTED — see header comment on cost/rationale.
+    // Thinking ON с уменьшенным budget (3000 вместо прежних 8000) — компромисс между
+    // качеством и ценой. Без thinking rewriter стал ленивым: 7s latency, но 12.4% new
+    // tokens — не проходил sycophancy guard 15% (Герыч 23.04 19:11). 3000 reasoning tokens
+    // достаточно чтобы переписать weak секции на глубине, не просто косметически.
+    // Claude с reasoning требует temperature=1.0.
+    max_tokens: 12000,
+    temperature: 1.0,
+    reasoning: { max_tokens: 3000 },
+    // response_format: OMIT — incompatible with reasoning ON via OpenRouter
   };
 
   for (let attempt = 1; attempt <= 2; attempt++) {
