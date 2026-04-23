@@ -499,13 +499,30 @@ export async function generateLyrics({ occasion, genre, mood, voice, wishes, por
 
   const title = extractTitle(lyrics, occasion, wishes);
 
-  const metrics = scoreDraft(lyrics);
+  const metrics = await scoreDraft(lyrics);
   // Lost-fact gate: proper nouns from user wishes that did NOT make it into lyrics.
   // Если пользователь упомянул «Yamaha», «Казань», «Зевс» и т.д., а в финале их нет —
   // pipeline не должен делать fast path; критик должен пенализировать story_specificity
   // и rewriter обязан вставить пропущенные факты.
   metrics.lost_facts = findLostFacts(wishes, lyrics);
-  console.log('[ai] metrics:', JSON.stringify(metrics));
+  // Лог компактный — полные списки рифм не распухают в journalctl. Полный объект metrics
+  // доступен вниз по pipeline через возвращаемое значение.
+  const rhymeCounts = {
+    true: metrics.rhymes?.true?.length ?? 0,
+    approx: metrics.rhymes?.approximate?.length ?? 0,
+    fake: metrics.rhymes?.fake?.length ?? 0,
+  };
+  console.log('[ai] metrics:', JSON.stringify({
+    banale_pairs: metrics.banale_pairs,
+    syllable_violations: metrics.syllable_violations,
+    lexical_diversity: metrics.lexical_diversity,
+    rhymes: rhymeCounts,
+    lost_facts: metrics.lost_facts,
+    skip_pipeline: metrics.skip_pipeline,
+  }));
+  if (rhymeCounts.fake > 0) {
+    console.log('[ai] fake rhymes:', metrics.rhymes.fake.map(p => p.join('/')).join(', '));
+  }
   return { lyrics, tags, title, metrics };
 }
 

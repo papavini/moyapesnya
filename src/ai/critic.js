@@ -225,6 +225,43 @@ function buildCriticUserMessage(lyrics, metrics, specificity, portrait) {
     );
   }
 
+  // Rhyme verdict: classification from the deterministic Python sidecar (src/ai/rhymes.js
+  // → rhyme-sidecar on :3100). When present, critic is no longer allowed to subjectively
+  // judge rhyme_quality — it gets a phonetic classification as ground truth.
+  // If sidecar was unavailable (fallback returned empty {true:[],approximate:[],fake:[]}),
+  // critic falls back to its own DIMENSION 3 rubric (status quo pre-sidecar).
+  const rhymes = metrics?.rhymes || null;
+  const fakeRhymes = Array.isArray(rhymes?.fake) ? rhymes.fake : [];
+  const approxRhymes = Array.isArray(rhymes?.approximate) ? rhymes.approximate : [];
+  const trueRhymes = Array.isArray(rhymes?.true) ? rhymes.true : [];
+  const sidecarActive = fakeRhymes.length + approxRhymes.length + trueRhymes.length > 0;
+  if (sidecarActive) {
+    const fmt = (pair) => `«${pair[0]} / ${pair[1]}»`;
+    const lines = [
+      '## DETECTED RHYMES (phonetic analyzer — deterministic facts, DO NOT contradict):',
+      `True rhymes:        ${trueRhymes.length ? trueRhymes.map(fmt).join(', ') : '(none)'}`,
+      `Approximate rhymes: ${approxRhymes.length ? approxRhymes.map(fmt).join(', ') : '(none)'} — acceptable in pop`,
+      `Fake rhymes:        ${fakeRhymes.length ? fakeRhymes.map(fmt).join(', ') : '(none)'}`,
+    ];
+    if (fakeRhymes.length > 0) {
+      lines.push(
+        '',
+        `VERDICT: rhyme_quality.score MUST be ≤ ${fakeRhymes.length >= 2 ? '0' : '1'}.`,
+        'rewrite_instructions for rhyme_quality MUST list EACH fake pair in the format',
+        '«word1 / word2» and demand it be replaced with a TRUE rhyme on the same stressed vowel.',
+        'DO NOT second-guess the classifier — these pairs are phonetic FAKES by dictionary-',
+        'based stress analysis. Your job is to tell the rewriter how to fix them.'
+      );
+    } else {
+      lines.push(
+        '',
+        'VERDICT: rhyme_quality scoring proceeds normally against the ladder. Since no fake',
+        'pairs exist, your score reflects freshness, clichés, and verb-only rhymes.'
+      );
+    }
+    sections.push(...lines, '');
+  }
+
   sections.push(
     '## Pre-computed metrics (treat as GROUNDING FACTS — do not contradict these):',
     '```json',

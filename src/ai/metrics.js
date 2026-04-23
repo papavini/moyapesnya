@@ -1,7 +1,14 @@
-// Синхронный gate-модуль для оценки качества черновика текста песни.
-// Три метрики: банальные рифмы (lookup по кластерам), слоговые нарушения (regex по гласным),
-// лексическое разнообразие (MATTR-approx, скользящее окно 50 токенов).
-// Нет зависимостей, нет I/O, нет API-вызовов. Чистая функция.
+// Gate-модуль для оценки качества черновика текста песни.
+// Метрики:
+//   — банальные рифмы (lookup по кластерам, sync)
+//   — слоговые нарушения (regex по гласным, sync)
+//   — лексическое разнообразие (MATTR-approx, скользящее окно 50 токенов, sync)
+//   — lost facts (proper nouns из wishes которые не попали в lyrics, sync)
+//   — rhymes (TRUE/APPROXIMATE/FAKE через Python-сайдкар, async, graceful degradation)
+// scoreDraft async из-за рифмо-детектора, но все остальные helper'ы синхронные.
+// На отсутствующий сайдкар deggrade до пустого rhymes (см. src/ai/rhymes.js).
+
+import { detectRhymes } from './rhymes.js';
 
 // Гласные буквы русского алфавита (ё/Ё явно указаны — [а-я] не включает ё в JS Unicode)
 const RUSSIAN_VOWELS = /[аеёиоуыэюяАЕЁИОУЫЭЮЯ]/g;
@@ -326,26 +333,43 @@ export function findLostFacts(wishes, lyrics) {
 }
 
 /**
- * Оценивает черновик текста песни по трём метрикам качества.
- * Синхронная функция, без I/O, без зависимостей.
+ * Оценивает черновик текста песни по метрикам качества.
+ * Async: дёргает Python-сайдкар рифмо-детектора (timeout 3s, graceful degradation на empty).
  *
  * @param {string} lyrics - полный текст с секциями [Куплет 1], [Припев], [Куплет 2], [Бридж], [Финал]
- * @returns {{ banale_pairs: string[][], syllable_violations: Array<{line: string, count: number, max: number}>, lexical_diversity: number, skip_pipeline: boolean }}
+ * @returns {Promise<{
+ *   banale_pairs: string[][],
+ *   syllable_violations: Array<{line: string, count: number, max: number}>,
+ *   lexical_diversity: number,
+ *   rhymes: { true: string[][], approximate: string[][], fake: string[][] },
+ *   skip_pipeline: boolean
+ * }>}
  */
-export function scoreDraft(lyrics) {
+export async function scoreDraft(lyrics) {
   const sections = parseSections(lyrics);
   const banalePairs = findBanalePairs(sections);
   const syllableViolations = findChorusSyllableViolations(sections);
   const tokens = tokenize(lyrics);
   const diversity = tokens.length > 0 ? computeMATTR(tokens) : 0;
+
+  // Детектор рифм — сайдкар. Errors/timeouts already handled inside detectRhymes().
+  const rhymes = await detectRhymes(lyrics);
+  const fakeCount = rhymes.fake?.length ?? 0;
+
+  // skip_pipeline теперь требует ТРИ условия:
+  //   — чистые метрики (banale=0, syllables=0, diversity>=0.60)
+  //   — AND нет fake rhymes от сайдкара
+  // lost_facts прокидывается в client.js и проверяется в pipeline.js отдельно.
   const skipPipeline = banalePairs.length === 0
     && syllableViolations.length === 0
-    && diversity >= SKIP_PIPELINE_THRESHOLD;
+    && diversity >= SKIP_PIPELINE_THRESHOLD
+    && fakeCount === 0;
 
   return {
     banale_pairs: banalePairs,
     syllable_violations: syllableViolations,
     lexical_diversity: Math.round(diversity * 1000) / 1000,
+    rhymes,
     skip_pipeline: skipPipeline,
   };
 }

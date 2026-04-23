@@ -1,0 +1,17 @@
+[Unit]
+Description=Rhyme Detector Sidecar (Podari Pesniu)
+After=network.target
+
+[Service]
+Type=simple
+User=alexander
+WorkingDirectory=/home/alexander/projects/rhyme-sidecar
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/alexander/projects/rhyme-sidecar/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 3100 --workers 1
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

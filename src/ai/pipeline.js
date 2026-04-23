@@ -127,16 +127,22 @@ export async function runPipeline({ occasion, genre, mood, voice, wishes }) {
   // Grounding visibility: did the generator actually use a subject_category_noun?
   logGroundingCheck(draft.lyrics, portrait, 'draft');
 
-  // Gate 1: Phase 1 metrics skip gate — only when there are NO lost facts.
+  // Gate 1: Phase 1 metrics skip gate — only when there are NO lost facts AND no fake rhymes.
   // lost_facts = proper nouns from user wishes (Казань, Yamaha, имена) that didn't
   // survive into lyrics. If any are missing, force critic + rewriter to recover them.
+  // fake rhymes = детектированные сайдкаром пары где ударные гласные различаются или
+  // нет общего хвоста. Всегда форсируем rewrite, даже если остальные метрики чистые.
   const lostFacts = draft.metrics?.lost_facts ?? [];
-  if (draft.metrics?.skip_pipeline && lostFacts.length === 0) {
-    console.log('[pipeline] metrics gate: skip_pipeline=true + no lost facts — fast path');
+  const fakeRhymes = draft.metrics?.rhymes?.fake ?? [];
+  if (draft.metrics?.skip_pipeline && lostFacts.length === 0 && fakeRhymes.length === 0) {
+    console.log('[pipeline] metrics gate: skip_pipeline=true + no lost facts + no fake rhymes — fast path');
     return { lyrics: draft.lyrics, tags: draft.tags, title: draft.title };
   }
   if (draft.metrics?.skip_pipeline && lostFacts.length > 0) {
     console.log(`[pipeline] metrics ok BUT lost facts: ${lostFacts.map(f => `«${f}»`).join(', ')} — forcing critic`);
+  }
+  if (fakeRhymes.length > 0) {
+    console.log(`[pipeline] fake rhymes: ${fakeRhymes.map(p => `«${p[0]}/${p[1]}»`).join(', ')} — forcing critic+rewriter`);
   }
 
   // Step C: critique with timeout (portrait gives critic a benchmark for story_specificity)

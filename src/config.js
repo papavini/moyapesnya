@@ -31,6 +31,10 @@ export const config = {
     criticModel: process.env.AI_CRITIC_MODEL || 'anthropic/claude-sonnet-4.6',
     rewriterModel: process.env.AI_REWRITER_MODEL || 'anthropic/claude-sonnet-4.6',
   },
+  rhymes: {
+    sidecarUrl: process.env.RHYMES_SIDECAR_URL || 'http://127.0.0.1:3100/detect',
+    timeoutMs: num(process.env.RHYMES_TIMEOUT_MS, 3000),
+  },
   robokassa: {
     merchantId: process.env.ROBOKASSA_MERCHANT_ID || '',
     pass1: process.env.ROBOKASSA_PASSWORD1 || '',

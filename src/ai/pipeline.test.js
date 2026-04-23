@@ -112,8 +112,8 @@ describe('runPipeline — output contract (PIPELINE-01 SC1)', () => {
 
 // SC2: fast path — CLEAN_DRAFT has skip_pipeline=true, pipeline returns without rewriting
 describe('runPipeline — fast path gate (PIPELINE-02 SC2)', () => {
-  it('CLEAN_DRAFT has skip_pipeline=true — confirmed by scoreDraft', () => {
-    const precheck = scoreDraft(CLEAN_DRAFT);
+  it('CLEAN_DRAFT has skip_pipeline=true — confirmed by scoreDraft', async () => {
+    const precheck = await scoreDraft(CLEAN_DRAFT);
     assert.strictEqual(precheck.skip_pipeline, true,
       'CLEAN_DRAFT must have skip_pipeline=true to validate fast path gate');
   });
@@ -124,7 +124,7 @@ describe('runPipeline — full rewrite path (PIPELINE-01 SC3)', () => {
   it('GENERIC_DRAFT triggers full pipeline and returned lyrics have >= 20% new tokens', async () => {
     // FAILS in Wave 1 (rewriteDraft stub returns null → 0% new tokens)
     // Passes in Wave 3 (full orchestrator implemented)
-    const precheck = scoreDraft(GENERIC_DRAFT);
+    const precheck = await scoreDraft(GENERIC_DRAFT);
     assert.strictEqual(precheck.skip_pipeline, false,
       'GENERIC_DRAFT must NOT have skip_pipeline=true');
 
@@ -145,7 +145,7 @@ describe('runPipeline — full rewrite path (PIPELINE-01 SC3)', () => {
 describe('runPipeline — KEEP sections verbatim (PIPELINE-04 SC4)', () => {
   it('sections marked KEEP in critique are reproduced verbatim in returned lyrics', async () => {
     const { critiqueDraft } = await import('./critic.js');
-    const metrics = scoreDraft(GENERIC_DRAFT);
+    const metrics = await scoreDraft(GENERIC_DRAFT);
     const critique = await critiqueDraft(GENERIC_DRAFT, metrics);
     if (!critique || critique.total >= 13) {
       console.log('[SC4] skipping: critique null or total>=13 (fast path)');
@@ -178,7 +178,7 @@ describe('rewriteDraft — direct call (MODELS-01 / PIPELINE-04 SC5)', () => {
     // Passes in Wave 2 (full rewriter implemented)
     const { rewriteDraft } = await import('./rewriter.js');
     const { critiqueDraft } = await import('./critic.js');
-    const metrics = scoreDraft(GENERIC_DRAFT);
+    const metrics = await scoreDraft(GENERIC_DRAFT);
     const critique = await critiqueDraft(GENERIC_DRAFT, metrics);
     if (!critique) {
       console.log('[SC5] skipping: critique null');

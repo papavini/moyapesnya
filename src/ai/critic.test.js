@@ -132,7 +132,7 @@ describe('judgeSpecificity (METRICS-03)', () => {
 
 describe('critiqueDraft (PIPELINE-03)', () => {
   it('returns valid JSON with all 5 dimensions present, each score in 0-3, plus total', async () => {
-    const metrics = scoreDraft(GENERIC_DRAFT);
+    const metrics = await scoreDraft(GENERIC_DRAFT);
     const critique = await critiqueDraft(GENERIC_DRAFT, metrics);
     assert.ok(critique !== null, 'critiqueDraft must not return null on a well-formed draft');
     for (const dim of DIMS) {
@@ -152,7 +152,7 @@ describe('critiqueDraft (PIPELINE-03)', () => {
   });
 
   it('failing dimension (score <= 1) has non-empty rewrite_instructions', async () => {
-    const metrics = scoreDraft(GENERIC_DRAFT);
+    const metrics = await scoreDraft(GENERIC_DRAFT);
     const critique = await critiqueDraft(GENERIC_DRAFT, metrics);
     assert.ok(critique !== null, 'critique must not be null');
     const failing = DIMS.filter(d => critique[d].score <= 1);
@@ -166,7 +166,7 @@ describe('critiqueDraft (PIPELINE-03)', () => {
   });
 
   it('keep_sections has at least 2 entries', async () => {
-    const metrics = scoreDraft(SPECIFIC_DRAFT);
+    const metrics = await scoreDraft(SPECIFIC_DRAFT);
     const critique = await critiqueDraft(SPECIFIC_DRAFT, metrics);
     assert.ok(critique !== null, 'critique must not be null');
     assert.ok(Array.isArray(critique.keep_sections),
@@ -176,7 +176,7 @@ describe('critiqueDraft (PIPELINE-03)', () => {
   });
 
   it('Phase 1 passing draft (skip_pipeline=true) produces critique total >= 12', async () => {
-    const metrics = scoreDraft(CLEAN_DRAFT);
+    const metrics = await scoreDraft(CLEAN_DRAFT);
     // Precondition: this fixture really does pass the Phase 1 gate.
     assert.strictEqual(metrics.skip_pipeline, true,
       `precondition: CLEAN_DRAFT must pass Phase 1 gate; metrics=${JSON.stringify(metrics)}`);
