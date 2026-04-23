@@ -1,7 +1,10 @@
 // Rewrites a song draft given a structured critique from critic.js.
 // Model: config.ai.rewriterModel (default anthropic/claude-sonnet-4.6 — see src/config.js).
 // History: was google/gemini-2.5-flash; switched to Sonnet 4.6 in 34f4f27 because Flash
-// echoed the draft (~1.3% novelty). Sonnet's extended thinking requires temperature=1.0.
+// echoed the draft (~1.3% novelty). Extended thinking was ON until now — removed to halve
+// cost (~$0.11 → ~$0.03 per rewrite; thinking alone was ~3000-5000 output tokens that never
+// reached the user). Quality guarded by: explicit rewrite_instructions from critic (each
+// weak dim quotes a specific line), KEEP guard in prompt, post-check newTokenRatio >= 15%.
 // Returns {lyrics} on success, null on failure or exhausted retries.
 // Zero new dependencies.
 
@@ -162,11 +165,12 @@ export async function rewriteDraft(lyrics, critique, portrait = null) {
       { role: 'system', content: REWRITER_SYSTEM_PROMPT },
       { role: 'user', content: buildRewriterUserMessage(lyrics, critique, portrait) },
     ],
-    max_tokens: 16000,
-    // Claude with extended thinking REQUIRES temperature=1.0.
-    temperature: 1.0,
-    reasoning: { max_tokens: 8000 },
-    // response_format: omit — incompatible with reasoning ON via OpenRouter
+    // Thinking OFF → can use json_object mode; max_tokens right-sized for structured output
+    // (no reasoning tokens to budget). ~4000 tok covers 25-line lyrics + JSON wrapping.
+    max_tokens: 4000,
+    temperature: 0.7,
+    response_format: { type: 'json_object' },
+    // reasoning: OMITTED — see header comment on cost/rationale.
   };
 
   for (let attempt = 1; attempt <= 2; attempt++) {

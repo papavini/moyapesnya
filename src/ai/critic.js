@@ -9,6 +9,10 @@ import { config } from '../config.js';
 // Hardcoded with optional env override via config.ai.criticModel.
 const CRITIC_MODEL = process.env.AI_CRITIC_MODEL || config.ai.criticModel || 'anthropic/claude-sonnet-4.6';
 
+// Specificity judge is a binary yes/no micro-call — Haiku 4.5 handles this for 1/4 the cost
+// of Sonnet 4.6. Separate config field so we can dial judge independently of main critic.
+const JUDGE_MODEL = process.env.AI_JUDGE_MODEL || config.ai.judgeModel || 'anthropic/claude-haiku-4.5';
+
 // METRICS-03 micro-call prompt: two binary questions about the draft.
 // Cheap (~50 output tokens). Result feeds the Story Specificity dimension.
 const SPECIFICITY_JUDGE_PROMPT = (lyrics) => `You are a text analysis tool. Answer two questions about the song text below with YES or NO only.
@@ -325,7 +329,7 @@ export async function judgeSpecificity(lyrics) {
   }
 
   const body = {
-    model: CRITIC_MODEL,
+    model: JUDGE_MODEL,
     messages: [
       { role: 'user', content: SPECIFICITY_JUDGE_PROMPT(lyrics) },
     ],

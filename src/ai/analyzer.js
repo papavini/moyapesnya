@@ -4,11 +4,13 @@
 
 import { config } from '../config.js';
 
-// Reuse critic model by default — same Sonnet 4.6 handles analysis cleanly.
-// Separate env override lets user pick a cheaper/different model for this step.
-const ANALYZER_MODEL = process.env.AI_ANALYZER_MODEL
-  || config.ai.criticModel
-  || 'anthropic/claude-sonnet-4.6';
+// Structured JSON extraction — no creative reasoning needed. Default is Haiku 4.5 via
+// config.ai.analyzerModel (~4x cheaper than Sonnet 4.6). On Haiku failure the pipeline
+// degrades gracefully (portrait=null → wishes-only generation) so cost/quality downside
+// is contained.
+const ANALYZER_MODEL = config.ai.analyzerModel
+  || process.env.AI_ANALYZER_MODEL
+  || 'anthropic/claude-haiku-4.5';
 
 // The analyzer is a FOCUSED character-study task. Not creative writing — deliberate
 // extraction of what makes THIS subject recognizable. Output is structured JSON

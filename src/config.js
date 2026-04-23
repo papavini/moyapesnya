@@ -30,6 +30,10 @@ export const config = {
     baseUrl: process.env.AI_BASE_URL || 'https://openrouter.ai/api/v1',
     criticModel: process.env.AI_CRITIC_MODEL || 'anthropic/claude-sonnet-4.6',
     rewriterModel: process.env.AI_REWRITER_MODEL || 'anthropic/claude-sonnet-4.6',
+    // Cheap model for non-reasoning structured extraction (analyzer portrait, specificity judge).
+    // Haiku 4.5 is ~4x cheaper than Sonnet 4.6 and handles rubric-driven JSON output reliably.
+    analyzerModel: process.env.AI_ANALYZER_MODEL || 'anthropic/claude-haiku-4.5',
+    judgeModel: process.env.AI_JUDGE_MODEL || 'anthropic/claude-haiku-4.5',
   },
   rhymes: {
     sidecarUrl: process.env.RHYMES_SIDECAR_URL || 'http://127.0.0.1:3100/detect',
