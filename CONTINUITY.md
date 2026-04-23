@@ -71,18 +71,63 @@ Credits списываются. Повторная генерация обычн
 ## State
 - **Бот:** работает ✅, cookie свежая (обновлена вручную 14.04), suno-api авторизован
 - **Credits:** 2040/2500
-- **AI модели (после echo-chamber фикса 16.04):**
-  - **Analyzer (Phase 4):** `anthropic/claude-sonnet-4.6` (re-uses critic model; env override `AI_ANALYZER_MODEL`)
-  - Генератор: `google/gemini-2.5-pro` (AI_MODEL в .env)
-  - Критик: `anthropic/claude-sonnet-4.6` (config default) — cross-model ✓
-  - Rewriter: `anthropic/claude-sonnet-4.6` (config default, hotfix 34f4f27)
+- **AI модели (после SUPERSTIHI 23.04 — 3 песни «ахуенные», подтверждено пользователем):**
+  - **Generator:** `google/gemini-3.1-pro-preview` (AI_MODEL в .env; cross-model vs Anthropic critic/rewriter ломает echo chamber)
+  - **Analyzer:** `anthropic/claude-haiku-4.5` (commit 1015847, cost -4x vs Sonnet)
+  - **Judge (specificity):** `anthropic/claude-haiku-4.5` (commit 1015847)
+  - **Critic:** `anthropic/claude-sonnet-4.6` (config default)
+  - **Rewriter:** `anthropic/claude-sonnet-4.6` (thinking ON budget 3000 — commit b660fd4; без thinking был sycophantic)
 - **Деплой:** commits 5ebf501 + d967c5d + 69032b1 + d5e8065 + **03a4d63 (rhyme tightening)** на сервере + .env AI_MODEL переключён в live
 - **Cookie:** свежая (обновлена 14.04 08:51)
 - **AI Poet Pipeline:** Phase 1 ✅, Phase 2 ✅, Phase 3 ✅, **Phase 4 ✅ (Subject Understanding)**. Все 4 LLM-раунда работают: U → G → C → R. Live tuning: metrics fast path отключён (5ebf501), sycophancy threshold 15% (d48e009), rewriter Sonnet 4.6 temp=1.0 (34f4f27).
 - **Phase 4 COMPLETE (commits d967c5d + 69032b1):** src/ai/analyzer.js → understandSubject() возвращает портрет JSON (8 полей, валидация по shape). Pipeline: U → G → C → R, портрет передаётся всем downstream. Graceful degradation если portrait=null (30s timeout). Live тест после grounding fix подтвердил: «пёс»/«лабрадор»/«хвост» появляются в финальном тексте; logGroundingCheck даёт visibility на draft и rewritten этапах. Документация: `.planning/phases/04-subject-understanding/{04-RESEARCH,04-IMPLEMENTATION,04-VERIFICATION,04-SUMMARY}.md`.
 - **Live результат Зевс v2 (после grounding fix):** «чёрный пёс» в строке 1 [Куплет 1], «лабрадор» в строке 6, рефрен «Зевс на Олимпе? Нет — Зевс у лужи!». 3 конкретные сцены (лужа / голова на коленях / шланг и брызги), wordplay поверх grounding, тон cheeky/playful. Узнаваемость подтверждена. **Остаточный долг (Phase 5 калибровка):** критик Sonnet 4.6 пропустил fake rhymes («всё/по-своему», «глаза/тебя», «всё/кино»); метрические шероховатости («по-своему» как costyль для рифмы), 2× «вот ___» как филлер; [Финал] всего 2 строки — не Phase 4 проблемы, это критик/rewriter не дожимает на rhyme_quality.
 
-## Done (2026-04-23)
+## Done (2026-04-23) — SUPERSTIHI session
+
+**⭐ Главный итог:** пользователь сгенерировал **3 песни подряд** с новым стеком и сказал «прям нравится!!!». Корневая проблема — echo chamber (Sonnet 4.6 генерил, критиковал и переписывал сам себя) + галлюцинации Sonnet-генератора («отдара», «семейный рекорд», филлеры «вот»/«уж»). Решение — переключить generator на `google/gemini-3.1-pro-preview` (один env override). Все остальные компоненты (analyzer, judge, critic, rewriter, рифмо-sidecar, архив) работают в проде и проверены на живых заказах.
+
+### Коммиты дня (все DEPLOYED)
+- `03be7bf` — **Шаг 1: Phonetic rhyme sidecar** (Python на :3100, ruaccent + classifier TRUE/APPROX/FAKE)
+- `4d53a83` — docs: mark Step 1 deployed
+- `1015847` — **Cost -35%**: analyzer+judge на Haiku 4.5, rewriter без thinking (откачено в b660fd4)
+- `85954e9` — docs: sync stale headers
+- `318d04b` — `REWRITE_TIMEOUT_MS 90→150s` (edge-case страховка)
+- `b660fd4` — **fix rewriter**: вернуть thinking с budget 3000 (без thinking был sycophantic — 7.8-12.4% new tokens, rewrite rejected, пользователь получал original с fake rhymes)
+- `0775829` — **feat archive**: сохранять все доставленные песни в `./delivered/YYYY-MM-DD/<HH-mm-ss>-<platform>-<userId>-<slug>.md` с portrait/metrics/critique/lyrics/clips
+- `.env`: `AI_MODEL=google/gemini-3.1-pro-preview` (generator, SUPERSTIHI winning configuration)
+
+### Сравнение до/после (Sonnet generator → Gemini 3.1 Pro Preview)
+| Метрика | Sonnet 4.6 | Gemini 3.1 Pro |
+|---|---:|---:|
+| TRUE rhymes | 6-7 | **11** |
+| FAKE rhymes | 36-37 | **25** |
+| critic total | 7-8 | **9** |
+| story_specificity | 1 | **2** |
+| Lost facts | «Анжеликой», «Герыча» | **0** |
+| Галлюцинации | «отдара» | нет |
+| Вердикт пользователя | «говно», «хуета» | «прям нравится!!!» ⭐ |
+
+### Rewriter caveat
+Pipeline заставляет rewrite при fake>0 или soul gate, но rewriter (Sonnet 4.6 с thinking 3000) систематически даёт 7-12% new tokens → sycophancy guard 15% отвергает → пользователь получает original draft. В SUPERSTIHI-configurации оригинальные драфты Gemini хороши сами по себе, поэтому отвержение rewrite не вредит. **Open question:** лечить rewriter-lazy (понижать sycophancy порог до 10% или менять модель на Opus) или оставить как safety net.
+
+### Reboot recovery test (ещё сегодня)
+`sudo reboot` → почищено 17GB утечка chromium (111 renderer'ов с 13.04), все systemd services вернулись, sidecar работает после reboot. Нашли 10-дневный инфра-баг `chromium-watchdog.sh` chmod 644 → fixed `chmod +x`, но watchdog всё ещё не relaunches chromium (использует `nohup &` в `Type=oneshot` → детей убивает systemd). Не блокер.
+
+### Archive feature
+`src/lyrics-archive.js` + интеграция в `src/bots/telegram.js` — каждая доставленная песня теперь сохраняется на диск с полным провенансом (order + portrait + metrics + critique + lyrics + clips). Предотвращает потерю «хороших стихов» когда пользователь не скопировал вовремя (ранее journalctl truncate'ил lyrics на 50 символах). `saveDeliveredLyrics` never throws — архив не блокирует user path.
+
+### Открытые задачи
+- `chromium-watchdog` fix `Type=forking` + dynamic date
+- Autostart для RDP chromium :9223 (сейчас требует RDP login после reboot)
+- Рассмотреть снижение sycophancy threshold 15% → 10% чтобы rewrites проходили
+- Шаг 2 (Best-of-N) — через 10-20 наблюдаемых заказов если Gemini generator начнёт хромать
+- Cost check в OpenRouter billing — реально ли -35% после Haiku переключений + Gemini
+
+---
+
+### Детали отдельных коммитов
+
 - **Шаг 1 «идеальный поэт»: Python-сайдкар детектора рифм (commit 03be7bf, DEPLOYED, live-тест PASS):** код, тесты и systemd развёрнуты на сервере, reboot-recovery проверен, живой заказ подтвердил работу pipeline. **Live-тест (Герыч, rap/hip-hop, 18:12-18:18):** sidecar отработал за 292ms, детектировал 47 пар → 8 true / 6 approx / **33 fake** (рэп-жанр: мелкие куплеты, много internal rhymes); `[pipeline] fake rhymes: ... — forcing critic+rewriter` сработал; критик принял `DETECTED RHYMES` verdict и выдал rq=0 с ссылкой на «Фонетический анализатор зафиксировал многочисленные фейковые пары»; soul gate на story_specificity=1 форсил rewrite. **Один нюанс:** `REWRITE_TIMEOUT_MS=90s` не хватило — rewriter вернулся на 99-й секунде, pipeline уже отдал original draft (с 33 fake парами). Пользователь принял песню, но для не-рэп жанров это опасно — нужно поднять timeout до 120-150s. **Reboot recovery test (после деплоя):** сделали `sudo reboot` чтобы почистить 17GB утечку chromium (111 процессов с 13.04). Сервер поднялся за 90s, все 5 systemd services вернулись, sidecar работает после reboot (/health ok через 30s), memory 14Gi used → 3.4Gi used (освободили 10.5Gi). **Побочно нашли 10-дневный инфра-баг:** `chromium-watchdog.sh` имел chmod 644 с 13.04, systemd молча получал `Permission denied` → watchdog никогда не работал → chromium renderer'ы копились. После `chmod +x` watchdog запустился но не смог relaunch chromium: он использует `nohup ... &` в `Type=oneshot` unit'е, который убивает детей при завершении — нужен `Type=forking` или `systemd-run --scope`. Плюс hardcoded date string `Mon Apr 13 12:08:47` в логах (копипаст). Не блокер для Шага 1. **Открытые задачи (не сейчас):** (1) поднять `REWRITE_TIMEOUT_MS` 90s→150s, (2) fix chromium-watchdog Type=forking + dynamic date, (3) наблюдение 10-20 живых заказов для distribution fake-rhymes. План Шага 1: `C:\Users\user\.claude\plans\glistening-knitting-brooks.md`. пользователь пожаловался что тексты всё ещё слабые; главный системный провал — критик Sonnet 4.6 субъективно оценивает `rhyme_quality` и регулярно пропускает fake rhymes (всё/по-своему, глаза/тебя, привет/ответ, всё/кино). Решение — забрать оценку рифм у LLM и сделать её фактом через фонетический анализ со словарём ударений. **Node-часть (committed локально, 15/15 тестов GREEN):** новый `src/ai/rhymes.js` (HTTP-клиент с graceful degradation: таймаут 3s → пустой ответ, бот НИКОГДА не блокируется из-за сайдкара); `src/config.js` — секция `rhymes` (url + timeout env override); `src/ai/metrics.js` — `scoreDraft` стал async, добавлено поле `rhymes: {true, approximate, fake}`, `skip_pipeline` теперь требует ТРИ условия (чистые метрики И пусто lost_facts И пусто fake rhymes); `src/ai/client.js` — `await scoreDraft`, компактный лог счётчиков + отдельная строка с fake-парами; `src/ai/pipeline.js` — новый gate после Gate 1, force critic+rewriter если `fake.length > 0`; `src/ai/critic.js` — новый блок `## DETECTED RHYMES` с deterministic verdict (критик получает факт, не оценивает), старая DIMENSION 3 остаётся как backup при падении сайдкара; `src/ai/metrics.test.js` — полный async-рефакторинг + fetch-мок + 6 новых тестов на рифмо-интеграцию (15/15 PASS). **Python-сайдкар (`services/rhyme-sidecar/`, committed, 34/34 pytest GREEN):** FastAPI на 127.0.0.1:3100, модель `ruaccent` (Den4ikAI) с `small_poetry` + dict, lifespan-загрузка один раз; `app/classifier.py` — извлечение ударения (+ перед гласной convention), рифменный хвост, фонетическая нормализация (оглушение в→ф/б→п/д→т/г→к/з→с/ж→ш, стрип ъ, сохранение ь), классификация TRUE/APPROXIMATE/FAKE по orthographic vowel match; `app/extractor.py` — парсинг секций, извлечение последних слов, сбор пар (i,i+1)+(i,i+2); `app/main.py` — POST /detect + GET /health, pass-through fallback если ruaccent не грузится; systemd unit по образцу passkey-server. **BANALE остался на Node-стороне** (37 кластеров в `BANNED_RHYME_CLUSTERS` — single source of truth, без дублирования). **Не задеплоено:** файлы не запушены, сайдкар на сервере не установлен. Следующий шаг — задеплоить (git push + SSH install + systemd enable + смоук-тест на Зевс v2). План: `C:\Users\user\.claude\plans\glistening-knitting-brooks.md`.
 
 ## Done (2026-04-16)
@@ -158,13 +203,12 @@ Credits списываются. Повторная генерация обычн
 - Открытие: P1_ не критичен, cookie — главная аутентификация (тест 13.04)
 
 ## Now
-- **Шаг 1 «идеальный поэт» ЗАДЕПЛОЕН (commit 03be7bf), live-тест PASS.** rhyme-sidecar работает на :3100, подхватывается после reboot, classifier за 53-292ms выдаёт TRUE/APPROXIMATE/FAKE. Pipeline force-rewrite'ит при fake>0, критик уважает deterministic verdict. Один нюанс: rewriter timeout 90s иногда не хватает при 30+ fake парах.
+- **⭐ SUPERSTIHI достигнут.** Полный стек (rhyme sidecar + Haiku analyzer/judge + Gemini 3.1 Pro generator + Sonnet critic/rewriter + archive) задеплоен и работает. Пользователь подтвердил качество на 3 живых песнях. Текущая `AI_MODEL=google/gemini-3.1-pro-preview` на сервере — **в этой конфигурации echo chamber сломан**, метрики по всем dim улучшились относительно Sonnet-only pipeline.
 
 ## Next
-- **Мониторинг 10-20 живых заказов** — смотреть в journalctl распределение fake/approx/true, сколько заказов force-rewrite, где timeout rewriter'а срабатывает.
-- **Отдельная задача (когда решим)**: поднять `REWRITE_TIMEOUT_MS` 90s→150s в src/ai/pipeline.js — по live-тесту Герыча rewriter вернулся на 99s, pipeline уже отдал original с 33 fake парами. Для не-рэп жанров это опасно.
-- **Инфра-долг (отдельно)**: fix `chromium-watchdog.sh` — `Type=oneshot` + `nohup &` несовместимы, нужен `Type=forking` / `systemd-run --scope`; hardcoded date в логах. Плюс autostart для RDP chromium на :9223 (сейчас требует ручной RDP login после reboot).
-- **Решение о Шаге 2 (Best-of-N)** — через 1-2 недели после деплоя Шага 1, когда накопится distribution.
+- **Наблюдение 10-20 заказов в новой конфигурации** — архив каждой песни в `/home/alexander/projects/moyapesnya/delivered/` для ретроспективного разбора. Смотреть: стабилен ли Gemini 3.1 Pro Preview (preview модель — может деградировать), fake-rhyme distribution, частоту rewrite-rejection.
+- **Открытые задачи (не сейчас):** chromium-watchdog Type=forking + dynamic date; autostart RDP chromium :9223; рассмотреть sycophancy 15%→10% если rewrites будут постоянно отвергаться; план Шага 2 (Best-of-N) если Gemini начнёт хромать.
+- **Cost check** в OpenRouter billing — реально ли -35% после Haiku переключений + Gemini.
 - Robokassa: включить PAYWALL_ENABLED=true когда готов прайсинг
 
 ## Open questions
