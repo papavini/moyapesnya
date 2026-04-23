@@ -10,7 +10,7 @@ import { understandSubject } from './analyzer.js';
 
 const ANALYZER_TIMEOUT_MS = 30_000;   // 30s — single Sonnet call, no thinking, structured JSON
 const CRITIQUE_TIMEOUT_MS = 60_000;   // 60s — two API calls (specificity + critique) + up to 2 retries; raised from 30s after Герыч v1 (20 апр 11:50): critic finished at 11:52:09 (94s) with valid total=9 critique, but pipeline already timed out at 11:51:05 and shipped original draft
-const REWRITE_TIMEOUT_MS = 90_000;    // 90s — Claude Sonnet 4.6 with extended thinking is slower than Gemini Flash
+const REWRITE_TIMEOUT_MS = 150_000;   // 150s — raised from 90s after live Герыч (23.04): 33 fake rhymes + lost facts + soul-gate pushed rewriter to 99s, pipeline sdавался и возвращал original. Thinking OFF since 1015847 — обычный прогон быстрее, но edge-case (30+ fake, много rewrite_instructions) всё ещё может упереться в потолок.
 const SKIP_GATE_SCORE = 13;           // >= 13/15: fast path, skip rewrite (raised from 12 — Зевс v5 had total=12 with rq=1, fast-pathed despite critic flagging «привет/ответ»)
 // Soul floor: rhyme/singability are objective and can carry total to >=12 even when story
 // or emotion are 0/1 (e.g. [3,3,3,3,0]). These two dims are non-negotiable — if either
