@@ -1,0 +1,14 @@
+[Unit]
+Description=x11vnc attached to Xvfb :99 (for remote login to chromium)
+After=rdp-chromium-xvfb.service
+Wants=rdp-chromium-xvfb.service
+
+[Service]
+Type=simple
+User=alexander
+ExecStart=/usr/bin/x11vnc -display :99 -forever -nopw -rfbport 5900 -shared -noxdamage -quiet
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
