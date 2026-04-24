@@ -83,7 +83,35 @@ Credits списываются. Повторная генерация обычн
 - **Phase 4 COMPLETE (commits d967c5d + 69032b1):** src/ai/analyzer.js → understandSubject() возвращает портрет JSON (8 полей, валидация по shape). Pipeline: U → G → C → R, портрет передаётся всем downstream. Graceful degradation если portrait=null (30s timeout). Live тест после grounding fix подтвердил: «пёс»/«лабрадор»/«хвост» появляются в финальном тексте; logGroundingCheck даёт visibility на draft и rewritten этапах. Документация: `.planning/phases/04-subject-understanding/{04-RESEARCH,04-IMPLEMENTATION,04-VERIFICATION,04-SUMMARY}.md`.
 - **Live результат Зевс v2 (после grounding fix):** «чёрный пёс» в строке 1 [Куплет 1], «лабрадор» в строке 6, рефрен «Зевс на Олимпе? Нет — Зевс у лужи!». 3 конкретные сцены (лужа / голова на коленях / шланг и брызги), wordplay поверх grounding, тон cheeky/playful. Узнаваемость подтверждена. **Остаточный долг (Phase 5 калибровка):** критик Sonnet 4.6 пропустил fake rhymes («всё/по-своему», «глаза/тебя», «всё/кино»); метрические шероховатости («по-своему» как costyль для рифмы), 2× «вот ___» как филлер; [Финал] всего 2 строки — не Phase 4 проблемы, это критик/rewriter не дожимает на rhyme_quality.
 
-## Done (2026-04-24) — Chromium :9223 **автономный** через Xvfb + infra docs
+## Done (2026-04-24) — Content-policy fallback + new SUNO account (premium)
+
+### Content-policy fallback (commit `65ac30a`)
+
+User сделал заказ про «ГИБДД города Родники» → бот выдал «Не удалось сочинить текст». В логах: `[ai] AI не вернул текст`, строка `src/ai/client.js:473`. Диагностика показала — **Gemini 3.1 Pro Preview при чувствительных темах (силовые структуры, политика, 18+) возвращает 200 OK с пустым `message.content`** (silent content-policy refusal, не 400 error). Наш код только throw'ил generic exception.
+
+**Фикс:**
+- `src/ai/client.js` — выделил внутреннюю `requestLyrics(model, maxAttempts)`. Primary: `config.ai.model` (3 попытки). Если все 3 вернули пустой content → **fallback** на `config.ai.criticModel` (Sonnet 4.6, 2 попытки). Anthropic менее чувствителен к sensitive темам чем Gemini.
+- Если и fallback пустой → throw Error с `code='CONTENT_POLICY_REJECTED'`.
+- `src/bots/telegram.js` — catch распознаёт этот code и показывает user:
+  > 🚫 Тема песни не прошла фильтры AI
+  > Похоже, тема касается чувствительной области (политика, силовые структуры, религия, 18+ и т.п.) — AI-модели её блокируют.
+  > Попробуйте переформулировать пожелание: уберите упоминание организаций/должностей и опишите песню про человека.
+
+**Проверки:** npm check ✅, 15/15 tests ✅. Next live order про обычную тему должен работать обычным путём; ГИБДД-like теперь либо пройдёт через Sonnet либо покажет понятный refusal.
+
+### Переключение SUNO аккаунта (дневная операция)
+
+User купил премиум на ДРУГОМ SUNO-аккаунте. Нужно было:
+1. Подключиться к chromium'у на Xvfb :99 (headless) → **установил x11vnc + systemd сервис** (`server-configs/x11vnc-xvfb/`). TightVNC viewer от Windows → 192.168.0.128::5900.
+2. Sign Out → Sign In → новый Google → OK, новая Clerk `__session` в `~/.config/chromium/Default/Cookies`.
+3. Ручной `refreshCookie()` через node → suno_cookie.txt переписан новыми куками → suno-api restart → `credits_left: 50` (новый free-tier аккаунт).
+4. Затем user апгрейднул premium → `credits_left: 2500 / 2500, usage 0`.
+
+Артефакты:
+- `server-configs/x11vnc-xvfb/x11vnc-xvfb.service` — systemd с Restart=always, After=rdp-chromium-xvfb.service
+- `server-configs/x11vnc-xvfb/README.md` — установка, подключение, security
+
+### Xvfb-based chromium — главное исправление дня (commit `e83d41d`)
 
 ### Инцидент + траектория
 
