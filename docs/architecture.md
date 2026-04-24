@@ -68,9 +68,44 @@ P1_ токен (JWT HS256, ~1900 chars) менее критичен: тест с
 
 ### Cookie (src/suno/refresh-cookie.js)
 `__client` — httpOnly Clerk cookie, недоступна через `document.cookie`.
-Единственный способ получить: `Network.getAllCookies` (CDP) → РDP Chromium (порт 9223).
+Единственный способ получить: `Network.getAllCookies` (CDP) → RDP Chromium (порт 9223).
 Записывать ТОЛЬКО 5 essential кук (не все ~45 — иначе "Request Header Fields Too Large"):
 `__client`, `__client_uat`, `__client_uat_Jnxw-muT`, `__client_Jnxw-muT`, `suno_device_id`
+
+### RDP Chromium на :9223 — как запускается (обновлено 2026-04-24)
+**Источник правды:** `~/.config/autostart/chromium-suno.desktop` запускает chromium при входе пользователя в xRDP-сессию.
+
+Команда запуска (из autostart .desktop):
+```
+chromium --remote-debugging-port=9223 --remote-allow-origins=* \
+         --no-sandbox --disable-gpu --disable-dev-shm-usage \
+         --load-extension=/home/alexander/projects/suno-passkey-extension \
+         https://suno.com/create
+```
+
+**Ключевое:**
+- **БЕЗ `--user-data-dir`** → используется дефолтный профиль `~/.config/chromium/Default/`
+- В дефолтном профиле живёт Clerk session (`__session`, `__session_Jnxw-muT`) — юзер залогинен в SUNO постоянно
+- `~/.config/chromium/` в домашней → переживает reboot (/tmp чистится, home нет)
+- `--no-sandbox --disable-gpu --disable-dev-shm-usage` — флаги стабильности под xRDP display `:10`
+
+**Ручной запуск после reboot если autostart не сработал:**
+```bash
+ssh alexander@192.168.0.128 'bash -c "cat > /tmp/launch-chrome-cdp.sh <<EOF
+#!/bin/bash
+export DISPLAY=:10
+export XAUTHORITY=/home/alexander/.Xauthority
+exec chromium --remote-debugging-port=9223 --remote-allow-origins=* \\
+  --load-extension=/home/alexander/projects/suno-passkey-extension \\
+  --no-first-run --disable-session-crashed-bubble \\
+  --no-sandbox --disable-gpu --disable-dev-shm-usage --start-maximized \\
+  https://suno.com/create
+EOF
+chmod +x /tmp/launch-chrome-cdp.sh
+setsid /tmp/launch-chrome-cdp.sh </dev/null >/tmp/chromium-default.log 2>&1 &"'
+```
+
+**Ключевая ошибка которую я совершил 24.04 (для памяти):** запускал с `--user-data-dir=/tmp/chrome-rdp` создавая ИЗОЛИРОВАННЫЙ пустой профиль → SUNO login слетал → passkey refresh не работал. Правильно — без `--user-data-dir`, дефолтный профиль уже содержит всё что нужно.
 
 **Когда обновляется:**
 - Перед каждой генерацией: `ensureTokenAlive` делает 3 пробы get_limit, при 3x 500 **с session error в теле** → refreshCookie() (другой 500 не трогает куку)
