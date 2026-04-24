@@ -1,0 +1,15 @@
+[Unit]
+Description=Autonomous Chromium on Xvfb :99 with CDP :9223 (for SUNO refresh)
+After=network.target systemd-user-sessions.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=alexander
+Environment=HOME=/home/alexander
+ExecStart=/home/alexander/projects/start-rdp-chromium-xvfb.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
