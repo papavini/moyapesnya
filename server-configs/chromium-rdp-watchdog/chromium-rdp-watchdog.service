@@ -1,0 +1,9 @@
+[Unit]
+Description=RDP Chromium CDP :9223 watchdog (for SUNO passkey refresh)
+
+[Service]
+Type=oneshot
+User=alexander
+ExecStart=/home/alexander/projects/chromium-rdp-watchdog.sh
+StandardOutput=journal
+StandardError=journal
