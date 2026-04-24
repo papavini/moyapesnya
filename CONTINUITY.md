@@ -83,6 +83,26 @@ Credits списываются. Повторная генерация обычн
 - **Phase 4 COMPLETE (commits d967c5d + 69032b1):** src/ai/analyzer.js → understandSubject() возвращает портрет JSON (8 полей, валидация по shape). Pipeline: U → G → C → R, портрет передаётся всем downstream. Graceful degradation если portrait=null (30s timeout). Live тест после grounding fix подтвердил: «пёс»/«лабрадор»/«хвост» появляются в финальном тексте; logGroundingCheck даёт visibility на draft и rewritten этапах. Документация: `.planning/phases/04-subject-understanding/{04-RESEARCH,04-IMPLEMENTATION,04-VERIFICATION,04-SUMMARY}.md`.
 - **Live результат Зевс v2 (после grounding fix):** «чёрный пёс» в строке 1 [Куплет 1], «лабрадор» в строке 6, рефрен «Зевс на Олимпе? Нет — Зевс у лужи!». 3 конкретные сцены (лужа / голова на коленях / шланг и брызги), wordplay поверх grounding, тон cheeky/playful. Узнаваемость подтверждена. **Остаточный долг (Phase 5 калибровка):** критик Sonnet 4.6 пропустил fake rhymes («всё/по-своему», «глаза/тебя», «всё/кино»); метрические шероховатости («по-своему» как costyль для рифмы), 2× «вот ___» как филлер; [Финал] всего 2 строки — не Phase 4 проблемы, это критик/rewriter не дожимает на rhyme_quality.
 
+## Done (2026-04-24) — RDP Chromium :9223 restored + documented
+
+**Инцидент:** утром user получил «не удалось создать песню». Корень — P1_ protukh, refresh через CDP :9223 упал с `ECONNREFUSED` (chromium на :9223 не работал). Уходил час на диагностику потому что **документация молчала** про то как запускать :9223.
+
+**Найдено:**
+- Clerk session (`__session`, `__session_Jnxw-muT`) живёт в **дефолтном** профиле `~/.config/chromium/Default/Cookies` (c 13 апреля, home-persistent)
+- `/etc/xdg/autostart/` отсутствует `chromium-suno.desktop` — на самом деле он лежит в `~/.config/autostart/chromium-suno.desktop` (user-level autostart)
+- Старый autostart запускал chromium БЕЗ `--remote-debugging-port=9223` → CDP недоступен для passkey refresh
+- **Моя ошибка** (запомнить): несколько раз запускал chromium с `--user-data-dir=/tmp/chrome-rdp` — ИЗОЛИРОВАННЫЙ пустой профиль, SUNO login «слетал» → правильно запускать БЕЗ этого флага, дефолтный профиль всё содержит
+
+**Фикс:**
+- Пропатчил `~/.config/autostart/chromium-suno.desktop` — добавил `--remote-debugging-port=9223 --remote-allow-origins=* --no-sandbox --disable-gpu --disable-dev-shm-usage` перед URL
+- После reboot + xRDP login chromium сам поднимается с CDP :9223 + дефолтным профилем с __session
+- Вручную запуск восстановлен через `/tmp/launch-chrome-cdp.sh` (под setsid) — chromium alive, 2 вкладки suno.com/create, __session активна
+
+**Документация:**
+- `docs/architecture.md` раздел «RDP Chromium на :9223 — как запускается» (commit `b89e632`) — правильная команда запуска, ручной fallback, описание ошибки `--user-data-dir=/tmp/chrome-rdp` для памяти
+
+**Открытое:** autostart не срабатывает пока user не залогинится в xRDP — если reboot без последующего RDP login, :9223 не поднимется, refresh упадёт. Для полной автономности нужно либо `loginctl enable-linger alexander` + user systemd unit, либо Xvfb-based systemd service. Не блокер сейчас.
+
 ## Done (2026-04-23) — SUPERSTIHI session
 
 **⭐ Главный итог:** пользователь сгенерировал **3 песни подряд** с новым стеком и сказал «прям нравится!!!». Корневая проблема — echo chamber (Sonnet 4.6 генерил, критиковал и переписывал сам себя) + галлюцинации Sonnet-генератора («отдара», «семейный рекорд», филлеры «вот»/«уж»). Решение — переключить generator на `google/gemini-3.1-pro-preview` (один env override). Все остальные компоненты (analyzer, judge, critic, rewriter, рифмо-sidecar, архив) работают в проде и проверены на живых заказах.
