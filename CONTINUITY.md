@@ -83,25 +83,46 @@ Credits списываются. Повторная генерация обычн
 - **Phase 4 COMPLETE (commits d967c5d + 69032b1):** src/ai/analyzer.js → understandSubject() возвращает портрет JSON (8 полей, валидация по shape). Pipeline: U → G → C → R, портрет передаётся всем downstream. Graceful degradation если portrait=null (30s timeout). Live тест после grounding fix подтвердил: «пёс»/«лабрадор»/«хвост» появляются в финальном тексте; logGroundingCheck даёт visibility на draft и rewritten этапах. Документация: `.planning/phases/04-subject-understanding/{04-RESEARCH,04-IMPLEMENTATION,04-VERIFICATION,04-SUMMARY}.md`.
 - **Live результат Зевс v2 (после grounding fix):** «чёрный пёс» в строке 1 [Куплет 1], «лабрадор» в строке 6, рефрен «Зевс на Олимпе? Нет — Зевс у лужи!». 3 конкретные сцены (лужа / голова на коленях / шланг и брызги), wordplay поверх grounding, тон cheeky/playful. Узнаваемость подтверждена. **Остаточный долг (Phase 5 калибровка):** критик Sonnet 4.6 пропустил fake rhymes («всё/по-своему», «глаза/тебя», «всё/кино»); метрические шероховатости («по-своему» как costyль для рифмы), 2× «вот ___» как филлер; [Финал] всего 2 строки — не Phase 4 проблемы, это критик/rewriter не дожимает на rhyme_quality.
 
-## Done (2026-04-24) — RDP Chromium :9223 restored + documented
+## Done (2026-04-24) — Chromium :9223 **автономный** через Xvfb + infra docs
 
-**Инцидент:** утром user получил «не удалось создать песню». Корень — P1_ protukh, refresh через CDP :9223 упал с `ECONNREFUSED` (chromium на :9223 не работал). Уходил час на диагностику потому что **документация молчала** про то как запускать :9223.
+### Инцидент + траектория
 
-**Найдено:**
-- Clerk session (`__session`, `__session_Jnxw-muT`) живёт в **дефолтном** профиле `~/.config/chromium/Default/Cookies` (c 13 апреля, home-persistent)
-- `/etc/xdg/autostart/` отсутствует `chromium-suno.desktop` — на самом деле он лежит в `~/.config/autostart/chromium-suno.desktop` (user-level autostart)
-- Старый autostart запускал chromium БЕЗ `--remote-debugging-port=9223` → CDP недоступен для passkey refresh
-- **Моя ошибка** (запомнить): несколько раз запускал chromium с `--user-data-dir=/tmp/chrome-rdp` — ИЗОЛИРОВАННЫЙ пустой профиль, SUNO login «слетал» → правильно запускать БЕЗ этого флага, дефолтный профиль всё содержит
+Утром user: «не удалось создать песню». Корень — P1_ passkey protukh (живёт ~30-60 мин), refresh через CDP :9223 упал с `ECONNREFUSED`. Выяснилось — **chromium на xRDP display :10 умирает при каждом disconnect RDP** (user ушёл на работу / выключил Windows / сеть фликнула). Autostart заново поднимает только при _новом_ xRDP login. Значит в промежутки когда user offline → :9223 мёртв → refresh не работает → 422 → «не удалось создать песню».
 
-**Фикс:**
-- Пропатчил `~/.config/autostart/chromium-suno.desktop` — добавил `--remote-debugging-port=9223 --remote-allow-origins=* --no-sandbox --disable-gpu --disable-dev-shm-usage` перед URL
-- После reboot + xRDP login chromium сам поднимается с CDP :9223 + дефолтным профилем с __session
-- Вручную запуск восстановлен через `/tmp/launch-chrome-cdp.sh` (под setsid) — chromium alive, 2 вкладки suno.com/create, __session активна
+User правильно указал: сервер должен работать автономно 24/7 без user connection. Вчера "работало 10 дней" потому что user просто не делал заказов когда был offline, а пустой chromium сам поднимался при возвращении.
 
-**Документация:**
-- `docs/architecture.md` раздел «RDP Chromium на :9223 — как запускается» (commit `b89e632`) — правильная команда запуска, ручной fallback, описание ошибки `--user-data-dir=/tmp/chrome-rdp` для памяти
+### Финальное решение — Xvfb-based systemd (commit `e83d41d`)
 
-**Открытое:** autostart не срабатывает пока user не залогинится в xRDP — если reboot без последующего RDP login, :9223 не поднимется, refresh упадёт. Для полной автономности нужно либо `loginctl enable-linger alexander` + user systemd unit, либо Xvfb-based systemd service. Не блокер сейчас.
+Chromium теперь живёт на **виртуальном Xvfb :99** (headless X server, software rendering), запускается как systemd service `rdp-chromium-xvfb.service` с `Restart=always`. Не зависит от xRDP / user connection / GPU.
+
+**Артефакты в репо:** `server-configs/rdp-chromium-xvfb/`
+- `start-rdp-chromium-xvfb.sh` — Xvfb :99 + chromium с CDP :9223 + default profile
+- `rdp-chromium-xvfb.service` — systemd Type=simple Restart=always
+- `README.md` — установка, принцип, attach через x11vnc
+
+**На сервере:**
+- `apt install xvfb`
+- `/home/alexander/projects/start-rdp-chromium-xvfb.sh`
+- `/etc/systemd/system/rdp-chromium-xvfb.service` enabled
+- Старый `chromium-rdp-watchdog.timer` disabled (не нужен, systemd сам restart'ит)
+
+**Проверка live:** все 6 systemd services active; CDP :9223 Chrome/147 отвечает; tabs `https://suno.com/create` (не /sign-in → залогинен); `suno-api /api/get_limit` → `credits_left: 1630` (cookie валидна, SUNO принимает).
+
+### Побочные коммиты дня (до Xvfb)
+
+До того как пришли к Xvfb-решению, были попытки с xRDP (которые в итоге deprecated):
+- `b89e632` — docs/architecture.md раздел «RDP Chromium на :9223 — как запускается» (до Xvfb это был fallback manual launch)
+- `60d1838` — CONTINUITY note про инцидент
+- `8abfc3b` — `chromium-rdp-watchdog` systemd timer (30s проверка + relaunch). **Deprecated после Xvfb** — артефакты остаются в `server-configs/chromium-rdp-watchdog/` для истории
+- `76e8d41` — revert агрессивных флагов (`--no-sandbox --disable-gpu --disable-dev-shm-usage`) которые я добавил «для стабильности», а на деле они делали GPU-fatal
+
+### Найденные инфра-факты (запомнить)
+
+- Clerk `__session` / `__session_Jnxw-muT` живёт в `~/.config/chromium/Default/Cookies` (home-persistent, пережил все reboot'ы)
+- xRDP autostart `~/.config/autostart/chromium-suno.desktop` (user-level, не в `/etc/xdg/autostart`)
+- Clerk cookie в `suno_cookie.txt` от 14.04 **всё ещё валидна** — SUNO get_limit работает
+- **НЕ использовать `--user-data-dir=/tmp/chrome-rdp`** — создаёт изолированный пустой профиль, SUNO login слетает. Дефолтный профиль уже всё содержит
+- Xvfb установлен через apt (не был установлен ранее)
 
 ## Done (2026-04-23) — SUPERSTIHI session
 
