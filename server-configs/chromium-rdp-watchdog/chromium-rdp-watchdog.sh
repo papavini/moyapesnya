@@ -29,12 +29,6 @@ setsid nohup chromium \
     --remote-debugging-port=9223 \
     --remote-allow-origins=* \
     --load-extension=/home/alexander/projects/suno-passkey-extension \
-    --no-first-run \
-    --disable-session-crashed-bubble \
-    --no-sandbox \
-    --disable-gpu \
-    --disable-dev-shm-usage \
-    --start-maximized \
     https://suno.com/create \
     </dev/null >/tmp/chromium-rdp-watchdog.log 2>&1 &
 
