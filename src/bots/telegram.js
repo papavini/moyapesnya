@@ -261,8 +261,23 @@ export function createTelegramBot() {
       console.log('[telegram] AI OK, lyrics:', aiResult.lyrics?.substring(0, 50));
     } catch (e) {
       console.error('[telegram] AI ошибка:', e.message, e.stack?.substring(0, 200));
-      await ctx.api.editMessageText(lyricsMsg.chat.id, lyricsMsg.message_id,
-        '⚠️ Не удалось сочинить текст. Попробуйте ещё раз — /start');
+      // CONTENT_POLICY_REJECTED: primary + fallback модели вернули пустой content.
+      // Почти всегда = content-policy filter (чувствительная тема: силовые структуры,
+      // политика, религия, 18+). Показываем user-friendly сообщение, не generic
+      // «не удалось сочинить».
+      const isPolicyReject = e.code === 'CONTENT_POLICY_REJECTED'
+        || e.message === 'CONTENT_POLICY_REJECTED';
+      const userMsg = isPolicyReject
+        ? '🚫 <b>Тема песни не прошла фильтры AI</b>\n\n' +
+          'Похоже, тема касается чувствительной области (политика, силовые структуры, религия, 18+ и т.п.) — AI-модели её блокируют.\n\n' +
+          'Попробуйте <b>переформулировать пожелание</b>: уберите упоминание организаций/должностей и опишите песню про <i>человека</i> (имя, характер, увлечения, конкретные моменты жизни).\n\n' +
+          '/start — начать заново'
+        : '⚠️ Не удалось сочинить текст. Попробуйте ещё раз — /start';
+      try {
+        await ctx.api.editMessageText(lyricsMsg.chat.id, lyricsMsg.message_id, userMsg, { parse_mode: 'HTML' });
+      } catch {
+        await ctx.reply(userMsg, { parse_mode: 'HTML' });
+      }
       resetSession(PLATFORM, ctx.from.id);
       return;
     }

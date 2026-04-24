@@ -426,52 +426,75 @@ export async function generateLyrics({ occasion, genre, mood, voice, wishes, por
     `Голос: ${voice}\n` +
     `Пожелания и история от заказчика: ${wishes}`;
 
-  let text, res;
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      res = await fetch(`${config.ai.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.ai.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: config.ai.model,
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: userPrompt },
-          ],
-          max_tokens: 16000,
-          temperature: 1,
-          reasoning: { max_tokens: 8000 },
-        }),
-      });
-      text = await res.text();
-      if (res.ok) break;
-      console.log(`[ai] attempt ${attempt}: HTTP ${res.status}`);
-    } catch (e) {
-      console.log(`[ai] attempt ${attempt}: ${e.message}`);
-      if (attempt === 3) throw e;
-      await new Promise(r => setTimeout(r, 2000));
+  // Внутренняя функция — выполняет запрос к OpenRouter с заданной моделью.
+  // Возвращает {raw, rawStatus} — где rawStatus 'ok' | 'empty' | 'http_error'.
+  // Пустой content (200 OK с message.content = '') обычно = content-policy reject
+  // от Gemini. Вызывающая логика пробует fallback на другую модель.
+  async function requestLyrics(model, maxAttempts) {
+    let text, res;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        res = await fetch(`${config.ai.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.ai.apiKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT },
+              { role: 'user', content: userPrompt },
+            ],
+            max_tokens: 16000,
+            temperature: 1,
+            reasoning: { max_tokens: 8000 },
+          }),
+        });
+        text = await res.text();
+        if (res.ok) break;
+        console.log(`[ai] ${model} attempt ${attempt}: HTTP ${res.status}`);
+      } catch (e) {
+        console.log(`[ai] ${model} attempt ${attempt}: ${e.message}`);
+        if (attempt === maxAttempts) throw e;
+        await new Promise(r => setTimeout(r, 2000));
+      }
     }
+    if (!res.ok) {
+      return { raw: '', rawStatus: 'http_error', httpStatus: res.status, body: text.substring(0, 200) };
+    }
+    const data = JSON.parse(text);
+    const content = data.choices?.[0]?.message?.content;
+    let raw;
+    if (Array.isArray(content)) {
+      raw = content.filter(b => b.type === 'text').map(b => b.text).join('').trim();
+    } else {
+      raw = (content || '').trim();
+    }
+    return { raw, rawStatus: raw ? 'ok' : 'empty' };
   }
 
-  if (!res.ok) {
-    throw new Error(`OpenRouter ${res.status}: ${text.substring(0, 200)}`);
+  // Primary — основная модель из config.ai.model. До 3 попыток.
+  let result = await requestLyrics(config.ai.model, 3);
+
+  // Fallback на критика (Sonnet 4.6, Anthropic) — если primary вернул пустой content
+  // (обычно content-policy reject у Gemini). Anthropic менее чувствителен к sensitive темам.
+  if (result.rawStatus === 'empty' && config.ai.criticModel && config.ai.criticModel !== config.ai.model) {
+    console.log(`[ai] primary (${config.ai.model}) вернул пустой content — fallback на ${config.ai.criticModel}`);
+    result = await requestLyrics(config.ai.criticModel, 2);
   }
 
-  const data = JSON.parse(text);
-  // thinking mode возвращает content как массив блоков [{type:'thinking',...},{type:'text',...}]
-  const content = data.choices?.[0]?.message?.content;
-  let raw;
-  if (Array.isArray(content)) {
-    raw = content.filter(b => b.type === 'text').map(b => b.text).join('').trim();
-  } else {
-    raw = (content || '').trim();
+  if (result.rawStatus === 'http_error') {
+    throw new Error(`OpenRouter ${result.httpStatus}: ${result.body}`);
   }
-  if (!raw) {
-    throw new Error('AI не вернул текст');
+  if (result.rawStatus === 'empty') {
+    // И primary, и fallback отказались — маркируем специальным кодом для telegram.js,
+    // чтобы он показал user-friendly сообщение про content policy.
+    const err = new Error('CONTENT_POLICY_REJECTED');
+    err.code = 'CONTENT_POLICY_REJECTED';
+    throw err;
   }
+  const raw = result.raw;
 
   // Парсим JSON от AI
   let parsed;
