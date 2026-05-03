@@ -1,0 +1,21 @@
+[Unit]
+Description=SUNO refresh agent — remote cookie/passkey refresh over Tailscale
+Documentation=file:///home/alexander/projects/moyapesnya/server-configs/refresh-agent/README.md
+After=network-online.target tailscaled.service rdp-chromium-xvfb.service
+Wants=network-online.target tailscaled.service
+
+[Service]
+Type=simple
+User=alexander
+WorkingDirectory=/home/alexander/projects/moyapesnya
+ExecStart=/usr/bin/node services/refresh-agent/index.js
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+Environment=REFRESH_AGENT_HOST=100.103.150.29
+Environment=REFRESH_AGENT_PORT=3200
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

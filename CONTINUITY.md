@@ -272,6 +272,13 @@ Pipeline заставляет rewrite при fake>0 или soul gate, но rewri
 - Открытие: P1_ не критичен, cookie — главная аутентификация (тест 13.04)
 
 ## Now
+- **🚧 v1 миграция Step 1 — refresh-agent (локально готов, не задеплоен):**
+  - `services/refresh-agent/index.js` — HTTP сервер на `100.103.150.29:3200` (tailnet IP), импортирует `src/suno/refresh-cookie.js` и `src/suno/refresh-passkey.js`. Endpoints `POST /refresh-cookie` (без body), `POST /refresh-passkey` (body `{lyrics,tags,title}`), `GET /health`. Refresh-операции сериализованы (mutex `withLock`).
+  - `services/refresh-agent/package.json` — документационный (deps берутся из корневого `package.json`).
+  - `server-configs/refresh-agent/refresh-agent.service` — systemd unit (User=alexander, WorkingDirectory=корень репо, Environment REFRESH_AGENT_HOST/PORT, Restart=always, After=tailscaled+rdp-chromium-xvfb).
+  - `server-configs/refresh-agent/README.md` — endpoints, security, install, sudoers, тест, откат.
+  - `node --check` локально PASS.
+  - **Не закоммичено, не задеплоено.** Дальше: коммит → push → SSH на мини-ПК → enable refresh-agent → smoke test `/health`.
 - **⭐ SUPERSTIHI достигнут.** Полный стек (rhyme sidecar + Haiku analyzer/judge + Gemini 3.1 Pro generator + Sonnet critic/rewriter + archive) задеплоен и работает. Пользователь подтвердил качество на 3 живых песнях. Текущая `AI_MODEL=google/gemini-3.1-pro-preview` на сервере — **в этой конфигурации echo chamber сломан**, метрики по всем dim улучшились относительно Sonnet-only pipeline.
 
 ## Next

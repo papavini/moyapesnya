@@ -1,0 +1,14 @@
+{
+  "name": "refresh-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "HTTP wrapper around src/suno/refresh-cookie.js + refresh-passkey.js for cross-machine SUNO auth refresh via Tailscale. Runs on the mini-PC; the cloud bot calls it.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
