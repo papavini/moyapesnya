@@ -39,6 +39,13 @@ export const config = {
     sidecarUrl: process.env.RHYMES_SIDECAR_URL || 'http://127.0.0.1:3100/detect',
     timeoutMs: num(process.env.RHYMES_TIMEOUT_MS, 3000),
   },
+  // Remote refresh-agent on the mini-PC (over Tailscale).
+  // Empty url → use local CDP (refresh-cookie.js / refresh-passkey.js) — for the mini-PC itself.
+  refreshAgent: {
+    url: (process.env.REFRESH_AGENT_URL || '').replace(/\/+$/, ''),
+    cookieTimeoutMs: num(process.env.REFRESH_AGENT_COOKIE_TIMEOUT_MS, 60000),
+    passkeyTimeoutMs: num(process.env.REFRESH_AGENT_PASSKEY_TIMEOUT_MS, 360000),
+  },
   robokassa: {
     merchantId: process.env.ROBOKASSA_MERCHANT_ID || '',
     pass1: process.env.ROBOKASSA_PASSWORD1 || '',

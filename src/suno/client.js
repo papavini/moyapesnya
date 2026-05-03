@@ -21,17 +21,56 @@ function isSessionError(e) {
   return e.status === 500 && (body.includes('session id') || body.includes('SUNO_COOKIE'));
 }
 
+// Refresh delegates: HTTP к refresh-agent (cloud → tailnet), либо локальный CDP (мини-ПК).
+// Выбор по config.refreshAgent.url — пусто = локальный CDP (default до cutover).
+async function callRefreshCookie() {
+  const { url, cookieTimeoutMs } = config.refreshAgent;
+  if (url) {
+    console.log(`[suno] refresh cookie via agent ${url}`);
+    const res = await fetch(`${url}/refresh-cookie`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+      signal: AbortSignal.timeout(cookieTimeoutMs),
+    });
+    const text = await res.text().catch(() => '');
+    if (!res.ok) throw new Error(`refresh-agent /refresh-cookie ${res.status}: ${text.slice(0, 200)}`);
+    return;
+  }
+  console.log('[suno] refresh cookie via local CDP...');
+  const { refreshCookie } = await import('./refresh-cookie.js');
+  await refreshCookie();
+}
+
+async function callRefreshPasskey(fills) {
+  const { url, passkeyTimeoutMs } = config.refreshAgent;
+  const [lyrics, tags, title] = fills || ['', '', ''];
+  if (url) {
+    console.log(`[suno] refresh passkey via agent ${url}`);
+    const res = await fetch(`${url}/refresh-passkey`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lyrics, tags, title }),
+      signal: AbortSignal.timeout(passkeyTimeoutMs),
+    });
+    const text = await res.text().catch(() => '');
+    if (!res.ok) throw new Error(`refresh-agent /refresh-passkey ${res.status}: ${text.slice(0, 200)}`);
+    let body = {};
+    try { body = JSON.parse(text); } catch {}
+    return body.ok === true;
+  }
+  console.log('[suno] refresh passkey via local CDP with user data...');
+  const { refreshPasskeyToken } = await import('./refresh-passkey.js');
+  return await refreshPasskeyToken(fills);
+}
+
 async function handleSunoError(e, fills) {
   if (isSessionError(e)) {
-    console.log('[suno] cookie expired, refreshing via CDP...');
-    const { refreshCookie } = await import('./refresh-cookie.js');
-    await refreshCookie();
+    await callRefreshCookie();
     return 'cookie';
   }
   if (isTokenError(e)) {
-    console.log('[suno] P1_ token expired, refreshing via CDP with user data...');
-    const { refreshPasskeyToken } = await import('./refresh-passkey.js');
-    await refreshPasskeyToken(fills); // передаём данные пользователя — не создаём мусор
+    await callRefreshPasskey(fills);
     await new Promise(r => setTimeout(r, 8000));
     return 'token';
   }
@@ -222,8 +261,7 @@ export async function ensureTokenAlive() {
 
   console.log('[suno] session error, обновляем cookie...');
   try {
-    const { refreshCookie } = await import('./refresh-cookie.js');
-    await refreshCookie();
+    await callRefreshCookie();
     await new Promise(r => setTimeout(r, 2000));
     const res = await fetch(`${config.suno.base}/api/get_limit`);
     if (res.ok) return true;

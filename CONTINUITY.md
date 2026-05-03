@@ -272,13 +272,17 @@ Pipeline заставляет rewrite при fake>0 или soul gate, но rewri
 - Открытие: P1_ не критичен, cookie — главная аутентификация (тест 13.04)
 
 ## Now
-- **🚧 v1 миграция Step 1 — refresh-agent (локально готов, не задеплоен):**
-  - `services/refresh-agent/index.js` — HTTP сервер на `100.103.150.29:3200` (tailnet IP), импортирует `src/suno/refresh-cookie.js` и `src/suno/refresh-passkey.js`. Endpoints `POST /refresh-cookie` (без body), `POST /refresh-passkey` (body `{lyrics,tags,title}`), `GET /health`. Refresh-операции сериализованы (mutex `withLock`).
-  - `services/refresh-agent/package.json` — документационный (deps берутся из корневого `package.json`).
-  - `server-configs/refresh-agent/refresh-agent.service` — systemd unit (User=alexander, WorkingDirectory=корень репо, Environment REFRESH_AGENT_HOST/PORT, Restart=always, After=tailscaled+rdp-chromium-xvfb).
-  - `server-configs/refresh-agent/README.md` — endpoints, security, install, sudoers, тест, откат.
-  - `node --check` локально PASS.
-  - **Не закоммичено, не задеплоено.** Дальше: коммит → push → SSH на мини-ПК → enable refresh-agent → smoke test `/health`.
+- **✅ v1 миграция Step 1 — refresh-agent ЗАДЕПЛОЕН (commit `1861abc`):**
+  - На мини-ПК `refresh-agent.service` active, listening on `100.103.150.29:3200` (tailnet only).
+  - Smoke-тесты PASS: local `/health` → 200, **cloud `user1@84.54.59.163` через tailnet → 200** с body `{"ok":true,"busy":false,"locked_by":null}` (~1.5s через DERP). Журнал показывает оба клиента: `100.103.150.29` (local) и `100.126.47.92` (cloud).
+  - Listener bound exclusively на tailnet IP — `192.168.0.128:3200` connection refused (как и должно).
+  - `/refresh-cookie` и `/refresh-passkey` ещё не дёрганы — destructive (cookie перезапустит suno-api на ~30s, passkey может потратить SUNO credits если CDP уйдёт в null-token loop). Откладываем до момента когда action нужен живому боту.
+- **✅ v1 миграция Step 2 — клиент с env-переключателем готов (локально, не задеплоено):**
+  - `src/config.js` — новый блок `refreshAgent: {url, cookieTimeoutMs, passkeyTimeoutMs}`. Env: `REFRESH_AGENT_URL` (trailing slash strip), `REFRESH_AGENT_COOKIE_TIMEOUT_MS=60000`, `REFRESH_AGENT_PASSKEY_TIMEOUT_MS=360000`.
+  - `src/suno/client.js` — добавлены `callRefreshCookie()` и `callRefreshPasskey(fills)`. При непустом `config.refreshAgent.url` идут HTTP в refresh-agent (`POST /refresh-cookie` / `POST /refresh-passkey {lyrics,tags,title}`) с `AbortSignal.timeout(...)`; иначе fallback на dynamic import локальных `refresh-cookie.js` / `refresh-passkey.js`. `handleSunoError` и `ensureTokenAlive` вызывают эти обёртки.
+  - `.env.example` — добавлен закомментированный блок `REFRESH_AGENT_URL=...`.
+  - `npm run check` 15/15 PASS, dynamic import `client.js` PASS, exports не изменились. Manual config test: пустой env → `url:""`, `http://...:3200/` → `http://...:3200`.
+  - **Деплой:** мини-ПК продолжит работать через локальный CDP (env пустой). На cloud добавим `REFRESH_AGENT_URL=http://100.103.150.29:3200` в `.env` уже на этапе cutover (Step 3). Пока — только git push.
 - **⭐ SUPERSTIHI достигнут.** Полный стек (rhyme sidecar + Haiku analyzer/judge + Gemini 3.1 Pro generator + Sonnet critic/rewriter + archive) задеплоен и работает. Пользователь подтвердил качество на 3 живых песнях. Текущая `AI_MODEL=google/gemini-3.1-pro-preview` на сервере — **в этой конфигурации echo chamber сломан**, метрики по всем dim улучшились относительно Sonnet-only pipeline.
 
 ## Next
