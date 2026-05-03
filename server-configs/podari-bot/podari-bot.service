@@ -1,0 +1,19 @@
+[Unit]
+Description=Podari Pesniu Telegram Bot (Sber Cloud)
+Documentation=file:///home/user1/projects/moyapesnya/server-configs/podari-bot/README.md
+After=network-online.target tailscaled.service
+Wants=network-online.target tailscaled.service
+
+[Service]
+Type=simple
+User=user1
+WorkingDirectory=/home/user1/projects/moyapesnya
+ExecStart=/usr/bin/node src/index.js
+Restart=always
+RestartSec=5
+EnvironmentFile=/home/user1/projects/moyapesnya/.env
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
