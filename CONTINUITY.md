@@ -272,15 +272,12 @@ Pipeline заставляет rewrite при fake>0 или soul gate, но rewri
 - Открытие: P1_ не критичен, cookie — главная аутентификация (тест 13.04)
 
 ## Now
-- **🛑 v1 миграция Step 3 — CUTOVER ОТКАЧЕН (2026-05-03 ~20:54 MSK).**
-  - **Корневая проблема: Sber Cloud блокирует исходящий трафик на api.telegram.org.**
-  - Симптомы: бот на cloud стартанул (commit `62cf0fe`, `podari-bot.service` active), suno ping OK через tailnet, но логи остановились на `[vk] пропускаю...` — `[telegram] ... long-polling` лог так и не появился. `ss -tnp` не показал TCP к Telegram. `curl -4 https://api.telegram.org` → HTTP 000 (8s timeout) на IPv4 `149.154.166.110`. `curl -6` → connection refused. `ping6` → Network unreachable. DNS работает (resolved оба варианта).
-  - Откатано: `podari-bot` остановлен и disabled на cloud, повторно enabled на мини-ПК. Через 4s после старта журнал показал `[telegram] @podaripesniu_bot запущен (long-polling)` ✅ — бот опять рабочий.
-  - **Состояние артефактов миграции (всё закоммичено, не удалено):**
-    - На cloud `/etc/systemd/system/podari-bot.service` остался (disabled).
-    - В cloud `.env` остался `REFRESH_AGENT_URL=http://100.103.150.29:3200` (безвредно — бот выключен).
-    - На мини-ПК ничего не тронуто кроме самого systemd unit (он всё ещё `enabled` после re-enable).
-    - refresh-agent на мини-ПК **продолжает работать** на `100.103.150.29:3200` (он не зависит от Telegram).
+- **⏸ v1 миграция бота — ОТЛОЖЕНА (решение 2026-05-03).** Бот остаётся на мини-ПК; Sber Cloud сейчас держит только сайт `мояпесня.рф`. Вернёмся когда решим, как обходить блок Telegram API на Sber egress (варианты A/B/C/D записаны в [Vault INDEX.md](../../Vault/Projects/suno-sales/INDEX.md) → «Что делать дальше»).
+  - **Артефакты миграции сохранены — поднять обратно ~1 минута:**
+    - refresh-agent на мини-ПК **active** на `100.103.150.29:3200` (commit `1861abc`).
+    - Код бота с env-переключателем `REFRESH_AGENT_URL` в main (commit `10de58a`) — мини-ПК работает с пустым env через локальный CDP.
+    - На cloud `/etc/systemd/system/podari-bot.service` есть, но disabled.
+    - В cloud `.env` сохранён `REFRESH_AGENT_URL=http://100.103.150.29:3200` (безвредно — unit выключен).
   - **AI_MODEL discrepancy (отдельный finding):** на мини-ПК .env показывает `AI_MODEL=google/gemini-2.5-pro`, не `gemini-3.1-pro-preview` как заявлено в SUPERSTIHI-разделе ниже. CONTINUITY была stale; live конфиг — `gemini-2.5-pro`. Это не блокер, но запоминаем.
 - **✅ v1 миграция Step 1 — refresh-agent ЗАДЕПЛОЕН (commit `1861abc`):**
   - На мини-ПК `refresh-agent.service` active, listening on `100.103.150.29:3200` (tailnet only).
