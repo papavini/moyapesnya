@@ -4,7 +4,7 @@
 Telegram-бот «Подари Песню!» (@podaripesniu_bot) — продажа персональных песен через SUNO.
 Успех: бот работает стабильно, генерирует песни, принимает оплату.
 
-**Текущий подпроект:** AI Poet Pipeline — multi-step G→C→R pipeline для повышения качества текстов.
+**Текущий подпроект:** **Site Backend (`мояпесня.рф`) — реализация полного функционала по `PROMPT_SITE.md`.** Декомпозирован на 7 подсистем; в работе #1 Foundation (cloud-backend + DB + Telegram-auth + guest-сессии). Spec одобрен 2026-05-03 → `docs/superpowers/specs/2026-05-03-foundation-design.md` (commit `886894a`). Фоном идёт AI Poet Pipeline (наблюдение SUPERSTIHI live-заказов).
 
 ## Constraints/Assumptions
 - Node.js 22, ESM, grammY 1.30, undici, ws
@@ -82,6 +82,49 @@ Credits списываются. Повторная генерация обычн
 - **AI Poet Pipeline:** Phase 1 ✅, Phase 2 ✅, Phase 3 ✅, **Phase 4 ✅ (Subject Understanding)**. Все 4 LLM-раунда работают: U → G → C → R. Live tuning: metrics fast path отключён (5ebf501), sycophancy threshold 15% (d48e009), rewriter Sonnet 4.6 temp=1.0 (34f4f27).
 - **Phase 4 COMPLETE (commits d967c5d + 69032b1):** src/ai/analyzer.js → understandSubject() возвращает портрет JSON (8 полей, валидация по shape). Pipeline: U → G → C → R, портрет передаётся всем downstream. Graceful degradation если portrait=null (30s timeout). Live тест после grounding fix подтвердил: «пёс»/«лабрадор»/«хвост» появляются в финальном тексте; logGroundingCheck даёт visibility на draft и rewritten этапах. Документация: `.planning/phases/04-subject-understanding/{04-RESEARCH,04-IMPLEMENTATION,04-VERIFICATION,04-SUMMARY}.md`.
 - **Live результат Зевс v2 (после grounding fix):** «чёрный пёс» в строке 1 [Куплет 1], «лабрадор» в строке 6, рефрен «Зевс на Олимпе? Нет — Зевс у лужи!». 3 конкретные сцены (лужа / голова на коленях / шланг и брызги), wordplay поверх grounding, тон cheeky/playful. Узнаваемость подтверждена. **Остаточный долг (Phase 5 калибровка):** критик Sonnet 4.6 пропустил fake rhymes («всё/по-своему», «глаза/тебя», «всё/кино»); метрические шероховатости («по-своему» как costyль для рифмы), 2× «вот ___» как филлер; [Финал] всего 2 строки — не Phase 4 проблемы, это критик/rewriter не дожимает на rhyme_quality.
+
+## Done (2026-05-03) — Site Backend подпроект запущен: Foundation spec одобрен
+
+User попросил «задеплоить сайт на Sber и запустить весь его функционал». Обнаружил что сайт уже физически задеплоен (`/var/www/podaripesnyu/` на `84.54.59.163`, все 14 HTML страниц + `assets/` + `legal/`), но **это статический интерактивный прототип без backend'а** — `app.js` только UI helpers, никаких fetch к API. «Запустить функционал» = построить полный backend по `PROMPT_SITE.md` (auth + DB + wizard + AI + SUNO + cabinet + Robokassa + gift). Слишком большой scope для одного spec — декомпозировал на 7 подсистем.
+
+### 7 подсистем (build order)
+
+1. **Foundation** — cloud-backend + DB + Telegram-auth + guest-сессии. **← В РАБОТЕ.**
+2. **Wizard → Generation → Result (free flow)** — приём 5 ответов wizard, AI pipeline, SUNO через tailnet, MP3 в плеер.
+3. **Cabinet** — реальные данные в `cabinet.html` / `song.html` / `profile.html`.
+4. **Email magic-link auth** — второй способ входа.
+5. **Robokassa оплата** — переключение бесплатно→299 ₽.
+6. **Bot ↔ Site userId unification** — бот пишет в общую DB через tailnet.
+7. **Gift / промо-пакеты** — `gift.html` функционал.
+
+### Foundation spec (commit `886894a`) — что выбрано через brainstorming
+
+- **БД:** SQLite + `better-sqlite3` (1-100 заказов/день, single instance, путь миграции на Postgres простой)
+- **Backend:** Fastify (schema-валидация из коробки, ESM-friendly, pino-логи в стиле проекта)
+- **Структура:** монорепо, новая папка `src/web/` рядом с `src/bots/` — общий `package.json`, переиспользует AI pipeline
+- **Schema:** 4 таблицы (`users`, `sessions`, `songs`, `email_login_codes`); ULID для `sessions.id`/`songs.id`; `INT` autoincrement для `users.id`; FK CASCADE для guest-songs; `email_login_codes` заложен под #4
+- **Auth:** Telegram Login Widget, верификация HMAC-SHA256 локально (без сетевых вызовов в Telegram). Домен `мояпесня.рф` привязан к `@podaripesniu_bot` через @BotFather (22:07 by user)
+- **Cookie:** `pp_sid` ULID, `Domain=xn--e1anecfn9ge.xn--p1ai` (punycode!), HttpOnly+Secure+SameSite=Lax, 30д guest / 90д auth с sliding expiration
+- **Migration guest→user:** атомарная транзакция с **session ID rotation** (OWASP A07:2021) — новая сессия + UPDATE songs + DELETE старой
+- **API endpoints (4 в Foundation):** `GET /api/health`, `GET /api/auth/me`, `POST /api/auth/telegram/callback`, `POST /api/auth/logout`
+- **Хостинг:** API на поддомене **`api.мояпесня.рф`** (отдельный nginx server-block + Let's Encrypt cert + CORS на бэкенде); Fastify слушает `127.0.0.1:8090`; systemd unit `podari-web.service`
+- **Тесты:** unit для pure-functions (HMAC verify, IP hash, ULID), integration через `fastify.inject()` с in-memory SQLite
+- **Деплой:** `git pull && npm install && systemctl restart podari-web`
+- **Acceptance criteria:** 10 атомарных проверок в spec'е (включая live Telegram-login смоук)
+
+### Не входит в Foundation (отложено в подсистемы #2-#7)
+
+Wizard backend, реальная генерация песен, реальный кабинет, email-auth, Robokassa, унификация с ботом, gift-пакеты, uptime-чекер.
+
+### Что увидит пользователь после Foundation
+
+Только: cookie выдаётся (незаметно); кнопка «Войти через Telegram» работает; имя/аватар появляются в шапке; «Выйти» работает; кабинет — пуст (песни придут в #2). Визуальный wow — на подсистеме #2.
+
+### Следующий шаг
+
+Переход в `superpowers:writing-plans` skill для создания пошагового implementation plan по Foundation spec'у.
+
+---
 
 ## Done (2026-04-24) — Content-policy fallback + new SUNO account (premium)
 
@@ -293,10 +336,10 @@ Pipeline заставляет rewrite при fake>0 или soul gate, но rewri
 - **⭐ SUPERSTIHI достигнут.** Полный стек (rhyme sidecar + Haiku analyzer/judge + Gemini 3.1 Pro generator + Sonnet critic/rewriter + archive) задеплоен и работает. Пользователь подтвердил качество на 3 живых песнях. Текущая `AI_MODEL=google/gemini-3.1-pro-preview` на сервере — **в этой конфигурации echo chamber сломан**, метрики по всем dim улучшились относительно Sonnet-only pipeline.
 
 ## Next
-- **Наблюдение 10-20 заказов в новой конфигурации** — архив каждой песни в `/home/alexander/projects/moyapesnya/delivered/` для ретроспективного разбора. Смотреть: стабилен ли Gemini 3.1 Pro Preview (preview модель — может деградировать), fake-rhyme distribution, частоту rewrite-rejection.
-- **Открытые задачи (не сейчас):** chromium-watchdog Type=forking + dynamic date; autostart RDP chromium :9223; рассмотреть sycophancy 15%→10% если rewrites будут постоянно отвергаться; план Шага 2 (Best-of-N) если Gemini начнёт хромать.
-- **Cost check** в OpenRouter billing — реально ли -35% после Haiku переключений + Gemini.
-- Robokassa: включить PAYWALL_ENABLED=true когда готов прайсинг
+- **🚀 Site Backend / Foundation (#1 of 7) — переход в `superpowers:writing-plans`** для создания пошагового implementation plan по spec'у `docs/superpowers/specs/2026-05-03-foundation-design.md`. После плана — implementation cycle (атомарные коммиты, smoke-тесты после деплоя на cloud).
+- После Foundation — последовательно подсистемы #2 (Wizard→Generation→Result) → #3 (Cabinet) → #4 (Email auth) → #5 (Robokassa) → #6 (Bot↔Site userId) → #7 (Gift).
+- **Параллельно:** наблюдение 10-20 живых заказов AI Pipeline в SUPERSTIHI-конфигурации — архив каждой песни в `/home/alexander/projects/moyapesnya/delivered/`.
+- **Открытые задачи (не сейчас):** chromium-watchdog Type=forking + dynamic date; autostart RDP chromium :9223; sycophancy 15%→10%; Best-of-N если Gemini деградирует; cost check OpenRouter; Robokassa включится в подсистеме #5.
 
 ## Open questions
 - Когда включать Robokassa?
@@ -307,6 +350,16 @@ Pipeline заставляет rewrite при fake>0 или soul gate, но rewri
 - ~~METRICS-01 ">=28 clusters"~~ — resolved: 37 clusters deployed
 
 ## Working set
+
+### Site Backend подпроект (NEW 2026-05-03)
+- `docs/superpowers/specs/2026-05-03-foundation-design.md` — **Foundation spec, ОДОБРЕН** (commit `886894a`)
+- `PROMPT_SITE.md` — продуктовый бриф (внутри `site/uploads/`, не в git)
+- `site/` — статический прототип (untracked, физически задеплоен в `/var/www/podaripesnyu/` на cloud `84.54.59.163`)
+- Cloud production: nginx + Let's Encrypt уже стоит, бэкенд (`podari-web.service`, Fastify на :8090, поддомен `api.мояпесня.рф`) ещё не существует
+- DNS: `мояпесня.рф` (Beget) → `84.54.59.163`. Поддомен `api.мояпесня.рф` ещё не настроен
+- Dependencies в `package.json`: будут добавлены `fastify`, `@fastify/cookie`, `@fastify/cors`, `better-sqlite3`, `ulid`
+
+### AI Poet Pipeline (фоном)
 - `.planning/ROADMAP.md` — **5-phase roadmap** (Phase 4 = Subject Understanding inserted; Phase 5 = A/B Validation)
 - `.planning/STATE.md` — pipeline project state (current_phase=5, completed_phases=4)
 - `.planning/REQUIREMENTS.md` — 13 v1 requirements (METRICS, PIPELINE, MODELS, VALID) + 4 added (UNDERSTAND-01..04)
