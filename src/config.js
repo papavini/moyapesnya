@@ -56,6 +56,19 @@ export const config = {
   webhookPort: num(process.env.WEBHOOK_PORT, 8080),
   webhookHost: process.env.WEBHOOK_HOST || '',
   paywallEnabled: bool(process.env.PAYWALL_ENABLED, false),
+  web: {
+    port:                   num(process.env.WEB_PORT, 8090),
+    publicUrl:              process.env.WEB_PUBLIC_URL || 'https://мояпесня.рф',
+    apiPublicUrl:           process.env.WEB_API_PUBLIC_URL || 'https://api.мояпесня.рф',
+    dbPath:                 process.env.DATABASE_PATH || './data/db.sqlite',
+    cookieName:             'pp_sid',
+    cookieDomain:           process.env.COOKIE_DOMAIN || 'xn--e1anecfn9ge.xn--p1ai', // punycode required by RFC 6265
+    cookieSecure:           bool(process.env.COOKIE_SECURE, true),
+    ipHashSalt:             process.env.IP_HASH_SALT || '',
+    sessionLifetimeGuestMs: 30 * 24 * 60 * 60 * 1000,
+    sessionLifetimeAuthMs:  90 * 24 * 60 * 60 * 1000,
+    guestSongTtlMs:         24 * 60 * 60 * 1000,
+  },
 };
 
 export function assertBotConfig(which) {
@@ -64,5 +77,14 @@ export function assertBotConfig(which) {
   }
   if (which === 'vk' && (!config.vk.token || !config.vk.groupId)) {
     throw new Error('VK_GROUP_TOKEN / VK_GROUP_ID не заданы в .env');
+  }
+}
+
+export function assertWebConfig() {
+  if (!config.web.ipHashSalt) {
+    throw new Error('IP_HASH_SALT не задан в .env (сгенерируй через `openssl rand -hex 32`)');
+  }
+  if (!config.telegram.token) {
+    throw new Error('TELEGRAM_BOT_TOKEN не задан в .env (нужен для verify Telegram Login Widget HMAC)');
   }
 }
