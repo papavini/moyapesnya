@@ -8,3 +8,9 @@ dist/
 .vscode/
 *.mp4
 .video_file_id
+
+# Web backend SQLite DB (live data, never commit)
+data/db.sqlite
+data/db.sqlite-wal
+data/db.sqlite-shm
+!data/.gitkeep
