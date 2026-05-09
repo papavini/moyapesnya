@@ -83,6 +83,62 @@ Credits списываются. Повторная генерация обычн
 - **Phase 4 COMPLETE (commits d967c5d + 69032b1):** src/ai/analyzer.js → understandSubject() возвращает портрет JSON (8 полей, валидация по shape). Pipeline: U → G → C → R, портрет передаётся всем downstream. Graceful degradation если portrait=null (30s timeout). Live тест после grounding fix подтвердил: «пёс»/«лабрадор»/«хвост» появляются в финальном тексте; logGroundingCheck даёт visibility на draft и rewritten этапах. Документация: `.planning/phases/04-subject-understanding/{04-RESEARCH,04-IMPLEMENTATION,04-VERIFICATION,04-SUMMARY}.md`.
 - **Live результат Зевс v2 (после grounding fix):** «чёрный пёс» в строке 1 [Куплет 1], «лабрадор» в строке 6, рефрен «Зевс на Олимпе? Нет — Зевс у лужи!». 3 конкретные сцены (лужа / голова на коленях / шланг и брызги), wordplay поверх grounding, тон cheeky/playful. Узнаваемость подтверждена. **Остаточный долг (Phase 5 калибровка):** критик Sonnet 4.6 пропустил fake rhymes («всё/по-своему», «глаза/тебя», «всё/кино»); метрические шероховатости («по-своему» как costyль для рифмы), 2× «вот ___» как филлер; [Финал] всего 2 строки — не Phase 4 проблемы, это критик/rewriter не дожимает на rhyme_quality.
 
+## Done (2026-05-09) — Foundation (Site Backend #1) ЗАДЕПЛОЕН на cloud
+
+**🟢 LIVE:** `https://api.мояпесня.рф/api/health` → 200 OK; `/api/auth/me` → guest cookie; HTTP→HTTPS 301; CORS на `https://xn--e1anecfn9ge.xn--p1ai`; Telegram-callback и logout работают (через тесты).
+
+### Что задеплоено
+
+**Локально (16 коммитов `6fd3f04..76804dd`, все запушены в origin/main):**
+- `src/web/` (новая папка): Fastify entrypoint + db.js (better-sqlite3 singleton + WAL + auto-migrate) + 4 services (ulid, ip-hash, telegram-login HMAC, session-store с атомарной guest→user миграцией) + 2 middleware (error, session) + 2 routes (health, auth) + lib/http-errors.
+- `src/web/schema/001_init.sql` — 4 таблицы (users / sessions / songs / email_login_codes) + индексы; `_migrations.js` runner.
+- 23/23 тестов GREEN: 3 ULID + 3 IP-hash + 5 Telegram-HMAC + 6 session-store + 6 integration через `fastify.inject()`.
+- `site/auth.html` — Telegram Login Widget встроен (`data-telegram-login=podaripesniu_bot`).
+- `site/assets/app.js` — `PT.fetchMe`, `PT.logout`, `window.onTelegramAuth`, header auto-detect.
+
+**Cloud-side (`84.54.59.163`, не в репо):**
+- `/etc/nginx/sites-enabled/podari-api.conf` — server-block `api.xn--e1anecfn9ge.xn--p1ai`, proxy_pass `127.0.0.1:8090` (после certbot — listen 443 ssl + redirect 80→443).
+- `/etc/letsencrypt/live/api.xn--e1anecfn9ge.xn--p1ai/` — Let's Encrypt cert до 2026-08-07, auto-renew через `certbot.timer`.
+- `/etc/systemd/system/podari-web.service` — `Type=simple`, `Restart=always`, EnvironmentFile=`.env`, ExecStart=`/usr/bin/node src/web/server.js`. Active.
+- `/home/user1/projects/moyapesnya/data/db.sqlite` — создаётся автоматически при первом запуске, миграция `001_init.sql` применена.
+- `~/projects/moyapesnya/.env` — добавлены WEB_PORT=8090, WEB_PUBLIC_URL/API_PUBLIC_URL (punycode!), DATABASE_PATH, COOKIE_*, IP_HASH_SALT (16 hex bytes, продублирован в Vault SECRETS.md).
+- DNS A-record `api.мояпесня.рф` → `84.54.59.163` (Beget).
+
+### Отклонения от плана (зафиксированы в коммитах)
+
+1. **`better-sqlite3` `^11` → `^12.9`** — у v11 нет prebuilds для Node 24, иначе fallback на gyp + MSVC C++ workload. На cloud Node 22, v12 prebuilt подхватился без билда.
+2. **CORS origin нормализуется через `new URL().origin`** — план оставлял кириллический `https://мояпесня.рф` в `Access-Control-Allow-Origin`, что валит запрос (HTTP-headers must be ASCII). Добавил `const corsOrigin = new URL(config.web.publicUrl).origin;` в `server.js` (Node автоматом punycode-encode'ит host).
+3. **WEB_PUBLIC_URL/API_PUBLIC_URL в cloud `.env` хранятся как punycode** — для безопасности через WSL→SSH→bash heredoc (кириллица + `$` режутся, см. INDEX.md грабли).
+4. **Test-helper `insertGuestSong` использует `newId()`** — план генерил коллизии PK при двух вызовах в одной мс.
+5. **nginx config + systemd unit отправлены через `scp`** — вместо `tee << EOF` (та же грабля с `$variable` мангалингом).
+
+### Следующий шаг
+
+Подсистема **#2 Wizard → Generation → Result** — приём 5 ответов wizard через POST → AI pipeline (понимание → генерация → критика → переписывание) → SUNO через tailnet → MP3 в плеер. После #2 пользователь увидит первую полностью функциональную песню на сайте.
+
+### Acceptance criteria (Task 19) — оставлены пользователю на руки
+
+Live Telegram-логин в инкогнито браузере (AC2/AC3/AC4/AC6) требует чтобы пользователь сам нажал на виджет и ввёл свои данные в Telegram. Бэкенд готов принимать; CORS настроен. Сделать когда будет настроение.
+
+### Реальный пример (curl, 2026-05-09)
+
+```
+$ curl -i https://api.xn--e1anecfn9ge.xn--p1ai/api/auth/me
+HTTP/1.1 200 OK
+access-control-allow-origin: https://xn--e1anecfn9ge.xn--p1ai
+access-control-allow-credentials: true
+set-cookie: pp_sid=01KR692DSAJ996K0Z0SY52W6P0; Max-Age=2592000; Domain=xn--e1anecfn9ge.xn--p1ai; Path=/; HttpOnly; Secure; SameSite=Lax
+
+{"guest":true}
+```
+
+### Минорный технический долг (не блокер)
+
+- `registerSessionMiddleware` навешан на ВСЕ routes включая `/api/health` → каждый healthcheck создаёт guest session в DB. Cleanup job сносит expired раз в час, но потенциальный мусор для будущих uptime-чекеров. Фикс: вынести `/api/health` до session middleware или skip в самой middleware.
+- `REFRESH_AGENT_URL=...` в cloud `.env` остался от откатанной v1-миграции; безвреден (podari-bot.service на cloud disabled).
+
+---
+
 ## Done (2026-05-03) — Site Backend подпроект запущен: Foundation spec одобрен
 
 User попросил «задеплоить сайт на Sber и запустить весь его функционал». Обнаружил что сайт уже физически задеплоен (`/var/www/podaripesnyu/` на `84.54.59.163`, все 14 HTML страниц + `assets/` + `legal/`), но **это статический интерактивный прототип без backend'а** — `app.js` только UI helpers, никаких fetch к API. «Запустить функционал» = построить полный backend по `PROMPT_SITE.md` (auth + DB + wizard + AI + SUNO + cabinet + Robokassa + gift). Слишком большой scope для одного spec — декомпозировал на 7 подсистем.
@@ -315,6 +371,8 @@ Pipeline заставляет rewrite при fake>0 или soul gate, но rewri
 - Открытие: P1_ не критичен, cookie — главная аутентификация (тест 13.04)
 
 ## Now
+- **🟢 Foundation (#1) DEPLOYED 2026-05-09.** API живёт на `https://api.мояпесня.рф`, `podari-web.service` active, cookie и Telegram HMAC работают. Acceptance criteria (live Telegram-логин в браузере) — на ручной прогон когда захочется.
+- **🚀 Подсистема #2 Wizard → Generation → Result — следующая.** Wizard backend (5 ответов → DB songs row), AI pipeline (U→G→C→R, переиспользуем существующие src/ai/*.js), SUNO через tailnet (`100.103.150.29:3000`), MP3 в плеер на `result.html`.
 - **⏸ v1 миграция бота — ОТЛОЖЕНА (решение 2026-05-03).** Бот остаётся на мини-ПК; Sber Cloud сейчас держит только сайт `мояпесня.рф`. Вернёмся когда решим, как обходить блок Telegram API на Sber egress (варианты A/B/C/D записаны в [Vault INDEX.md](../../Vault/Projects/suno-sales/INDEX.md) → «Что делать дальше»).
   - **Артефакты миграции сохранены — поднять обратно ~1 минута:**
     - refresh-agent на мини-ПК **active** на `100.103.150.29:3200` (commit `1861abc`).
@@ -336,8 +394,8 @@ Pipeline заставляет rewrite при fake>0 или soul gate, но rewri
 - **⭐ SUPERSTIHI достигнут.** Полный стек (rhyme sidecar + Haiku analyzer/judge + Gemini 3.1 Pro generator + Sonnet critic/rewriter + archive) задеплоен и работает. Пользователь подтвердил качество на 3 живых песнях. Текущая `AI_MODEL=google/gemini-3.1-pro-preview` на сервере — **в этой конфигурации echo chamber сломан**, метрики по всем dim улучшились относительно Sonnet-only pipeline.
 
 ## Next
-- **🚀 Site Backend / Foundation (#1 of 7) — переход в `superpowers:writing-plans`** для создания пошагового implementation plan по spec'у `docs/superpowers/specs/2026-05-03-foundation-design.md`. После плана — implementation cycle (атомарные коммиты, smoke-тесты после деплоя на cloud).
-- После Foundation — последовательно подсистемы #2 (Wizard→Generation→Result) → #3 (Cabinet) → #4 (Email auth) → #5 (Robokassa) → #6 (Bot↔Site userId) → #7 (Gift).
+- **🚀 Подсистема #2 Wizard → Generation → Result — следующий spec + plan + execute.** Pipeline переиспользуется (`src/ai/pipeline.js` готов). Новые routes: POST `/api/wizard/answers`, POST `/api/songs/:id/generate-text`, POST `/api/songs/:id/generate-music`, GET `/api/songs/:id`. Видео-плеер на `result.html` уже стоит — нужно подцепить к реальному MP3.
+- После #2 — последовательно подсистемы #3 (Cabinet) → #4 (Email auth) → #5 (Robokassa) → #6 (Bot↔Site userId) → #7 (Gift).
 - **Параллельно:** наблюдение 10-20 живых заказов AI Pipeline в SUPERSTIHI-конфигурации — архив каждой песни в `/home/alexander/projects/moyapesnya/delivered/`.
 - **Открытые задачи (не сейчас):** chromium-watchdog Type=forking + dynamic date; autostart RDP chromium :9223; sycophancy 15%→10%; Best-of-N если Gemini деградирует; cost check OpenRouter; Robokassa включится в подсистеме #5.
 
