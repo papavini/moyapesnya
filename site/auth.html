@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Войти — Подари Песню</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;1,400&family=Caveat:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/styles.css">
+<style>
+  .auth-shell { display: grid; grid-template-columns: 1fr 1fr; min-height: 80vh; max-width: 1200px; margin: 0 auto; padding: 40px 32px; gap: 64px; align-items: center; }
+  @media (max-width: 880px) { .auth-shell { grid-template-columns: 1fr; gap: 32px; } .auth-side { display: none; } }
+  .auth-form { max-width: 420px; }
+  .social-btn { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 20px; border: 1px solid var(--line); border-radius: var(--r-md); background: rgba(255,255,255,.02); color: var(--text); font-weight: 500; cursor: pointer; transition: all .2s; }
+  .social-btn:hover { border-color: var(--accent); }
+  .social-btn .ico { width: 28px; height: 28px; border-radius: 6px; display: grid; place-items: center; flex-shrink: 0; font-weight: 700; font-size: 13px; }
+  .divider { display: flex; align-items: center; gap: 16px; color: var(--text-muted); font-size: 13px; margin: 24px 0; font-family: var(--font-display); font-style: italic; }
+  .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+  .auth-side { padding: 48px; border-radius: var(--r-xl); background: linear-gradient(135deg, rgba(231,111,81,.08), rgba(232,180,107,.04)); border: 1px solid rgba(232,180,107,.2); }
+  .auth-quote { font-family: var(--font-display); font-style: italic; font-size: 28px; line-height: 1.35; color: var(--text); }
+</style>
+</head>
+<body>
+<div data-pt-header></div>
+
+<div class="auth-shell">
+  <div class="auth-form">
+    <span class="script" style="font-size:28px;color:var(--gold);" id="ctxScript">сохраним вашу историю</span>
+    <h1 style="margin:8px 0 12px;font-size:clamp(36px,4.5vw,52px);" id="ctxTitle">Войдите за <span class="accent-italic">10 секунд</span></h1>
+    <p class="muted mb-6" style="font-size:17px;font-family:var(--font-display);font-style:italic;" id="ctxSub">Без пароля. Чтобы текст и песня были привязаны к вам и не потерялись.</p>
+
+    <div class="flex" style="flex-direction: column; gap: 10px;">
+      <button class="social-btn" disabled title="Скоро"><span class="ico" style="background:#fc3f1d;color:#fff;">Я</span> Войти через Яндекс</button>
+      <button class="social-btn" disabled title="Скоро"><span class="ico" style="background:#0077ff;color:#fff;">VK</span> Войти через ВКонтакте</button>
+      <!-- Telegram Login Widget — подсистема #1 Foundation -->
+      <div id="tg-login-mount" style="display:flex;justify-content:flex-start;">
+        <script async src="https://telegram.org/js/telegram-widget.js?22"
+                data-telegram-login="podaripesniu_bot"
+                data-size="large"
+                data-radius="12"
+                data-onauth="onTelegramAuth(user)"
+                data-request-access="write"></script>
+      </div>
+      <noscript>
+        <p class="muted" style="font-size:13px;">Для входа через Telegram требуется JavaScript.</p>
+      </noscript>
+    </div>
+
+    <div class="divider">или по email</div>
+
+    <input class="input" type="email" placeholder="ваша@почта.ru" style="margin-bottom:12px;">
+    <button class="btn btn-primary btn-lg w-full">Прислать код на почту</button>
+
+    <p class="muted mt-6" style="font-size:13px;line-height:1.5;">
+      Продолжая, вы соглашаетесь с <a href="legal/offer.html">офертой</a> и <a href="legal/privacy.html">политикой конфиденциальности</a>.
+    </p>
+  </div>
+
+  <aside class="auth-side">
+    <span style="font-size:48px;">"</span>
+    <p class="auth-quote">Когда я нажала «оплатить», я уже точно знала, что мама заплачет. И мама заплакала. И я заплакала. И песня теперь у нас в чате — каждое утро.</p>
+    <div class="flex gap-3 mt-6" style="align-items:center;">
+      <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--coral),var(--gold));"></div>
+      <div>
+        <strong>Анна, 34</strong>
+        <div class="muted" style="font-size:13px;">Краснодар · «Маме на 60»</div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<div data-pt-footer></div>
+<script src="assets/app.js"></script>
+<script>
+  const params = new URLSearchParams(location.search);
+  const ctx = params.get('ctx') || 'b';
+  if (ctx === 'a') {
+    document.getElementById('ctxScript').textContent = 'чтобы не потерять';
+    document.getElementById('ctxTitle').innerHTML = 'Сохраним <span class="accent-italic">ваш текст</span>';
+    document.getElementById('ctxSub').textContent = 'Без входа песня живёт 24 часа. Войдите за 10 секунд — и текст всегда будет с вами.';
+  }
+</script>
+</body>
+</html>
